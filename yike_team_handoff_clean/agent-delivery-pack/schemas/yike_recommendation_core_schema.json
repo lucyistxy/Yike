@@ -1,0 +1,478 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yike.local/schemas/recommendation-core-v1.json",
+  "title": "Yike Recommendation Core v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "card": {
+      "$ref": "#/$defs/card"
+    },
+    "recommendation_request": {
+      "$ref": "#/$defs/recommendation_request"
+    },
+    "recommendation_result": {
+      "$ref": "#/$defs/recommendation_result"
+    },
+    "feedback_event": {
+      "$ref": "#/$defs/feedback_event"
+    },
+    "user_memory": {
+      "$ref": "#/$defs/user_memory"
+    }
+  },
+  "$defs": {
+    "card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "card_id",
+        "source_type",
+        "title",
+        "content_category",
+        "duration_min",
+        "duration_max",
+        "energy_level",
+        "indoor_outdoor",
+        "prep_cost",
+        "status",
+        "eligible_for_draw",
+        "missing_fields",
+        "created_at",
+        "updated_at"
+      ],
+      "properties": {
+        "card_id": {
+          "type": "string"
+        },
+        "user_id": {
+          "type": ["string", "null"]
+        },
+        "source_type": {
+          "enum": ["personal", "preset"]
+        },
+        "origin_preset_id": {
+          "type": ["string", "null"]
+        },
+        "source_asset": {
+          "type": ["object", "null"],
+          "additionalProperties": true
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "subtitle": {
+          "type": ["string", "null"]
+        },
+        "description": {
+          "type": ["string", "null"]
+        },
+        "content_category": {
+          "enum": [
+            "movie",
+            "series",
+            "book",
+            "music",
+            "restaurant",
+            "cafe",
+            "exhibition",
+            "game",
+            "craft",
+            "walk",
+            "shopping",
+            "event",
+            "social",
+            "home_activity",
+            "other"
+          ]
+        },
+        "mood_tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "duration_min": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration_max": {
+          "type": "number",
+          "minimum": 0
+        },
+        "energy_level": {
+          "enum": ["low", "medium", "high", "unknown"]
+        },
+        "indoor_outdoor": {
+          "enum": ["indoor", "outdoor", "flexible", "unknown"]
+        },
+        "prep_cost": {
+          "enum": ["low", "medium", "high", "unknown"]
+        },
+        "people": {
+          "enum": ["solo", "pair", "group", "flexible", "unknown"]
+        },
+        "budget_level": {
+          "enum": ["free", "low", "medium", "high", "unknown"]
+        },
+        "location_type": {
+          "enum": ["home", "nearby", "citywide", "online", "unknown"]
+        },
+        "distance_level": {
+          "enum": ["none", "short", "medium", "long", "unknown"]
+        },
+        "reservation_required": {
+          "type": ["boolean", "null"]
+        },
+        "ticket_required": {
+          "type": ["boolean", "null"]
+        },
+        "weather_dependency": {
+          "enum": [
+            "none",
+            "avoid_rain",
+            "avoid_heat",
+            "avoid_cold",
+            "sunny_preferred",
+            "indoor_backup",
+            "unknown"
+          ]
+        },
+        "constraint_tags": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "reservation_required",
+              "ticket_required",
+              "long_standing",
+              "transport_needed",
+              "requires_quiet",
+              "requires_focus",
+              "business_hours_limited",
+              "weather_sensitive",
+              "late_night_risk",
+              "crowded_place",
+              "food_related",
+              "alcohol_related"
+            ]
+          },
+          "default": []
+        },
+        "available_time_windows": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "avoid_time_windows": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "status": {
+          "enum": ["active", "pending", "cooling", "archived", "completed"]
+        },
+        "eligible_for_draw": {
+          "type": "boolean"
+        },
+        "missing_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cooling_until": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "last_recommended_at": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "recommend_count": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0
+        },
+        "feedback_summary": {
+          "type": ["object", "null"],
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "confidence": {
+          "type": ["object", "null"],
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        },
+        "quality_score": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "rule_version": {
+          "type": ["string", "null"]
+        },
+        "score_version": {
+          "type": ["string", "null"]
+        },
+        "notes": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "recommendation_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["user_id", "session_id", "context_input", "source_scope"],
+      "properties": {
+        "user_id": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": "string"
+        },
+        "location": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "properties": {
+            "city": {
+              "type": ["string", "null"]
+            },
+            "timezone": {
+              "type": "string"
+            }
+          }
+        },
+        "context_input": {
+          "$ref": "#/$defs/context_input"
+        },
+        "source_scope": {
+          "enum": ["personal", "preset", "both"]
+        }
+      }
+    },
+    "context_input": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "available_time": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "energy_level": {
+          "enum": ["low", "medium", "high", "unknown", null]
+        },
+        "go_out": {
+          "type": ["boolean", "null"]
+        },
+        "people": {
+          "enum": ["solo", "pair", "group", "flexible", "unknown", null]
+        },
+        "budget_level": {
+          "enum": ["free", "low", "medium", "high", "unknown", null]
+        },
+        "active_constraints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "mode_preference": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      }
+    },
+    "recommendation_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "selected_card",
+        "reason",
+        "top5",
+        "excluded_summary",
+        "context_snapshot",
+        "rule_version",
+        "score_version"
+      ],
+      "properties": {
+        "request_id": {
+          "type": "string"
+        },
+        "selected_card": {
+          "$ref": "#/$defs/card"
+        },
+        "reason": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        },
+        "top5": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "$ref": "#/$defs/scored_card"
+          }
+        },
+        "excluded_summary": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        },
+        "context_snapshot": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "rule_version": {
+          "type": "string"
+        },
+        "score_version": {
+          "type": "string"
+        }
+      }
+    },
+    "scored_card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["card_id", "score", "score_breakdown"],
+      "properties": {
+        "card_id": {
+          "type": "string"
+        },
+        "score": {
+          "type": "number"
+        },
+        "score_breakdown": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "required": [
+            "energy_score",
+            "time_fit_score",
+            "mood_preference_score",
+            "prep_cost_score",
+            "weather_time_score",
+            "feedback_score",
+            "freshness_score",
+            "source_score"
+          ]
+        }
+      }
+    },
+    "feedback_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["user_id", "card_id", "action", "created_at"],
+      "properties": {
+        "user_id": {
+          "type": "string"
+        },
+        "card_id": {
+          "type": "string"
+        },
+        "action": {
+          "enum": ["accept", "complete", "reroll", "not_suitable", "later", "dislike", "save_preset"]
+        },
+        "optional_reason": {
+          "type": ["string", "null"]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "user_memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["user_id", "preference_memory", "behavior_memory", "explicit_profile"],
+      "properties": {
+        "user_id": {
+          "type": "string"
+        },
+        "preference_memory": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "category_weights": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            },
+            "duration_preference": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "indoor_outdoor_preference": {
+              "enum": ["indoor", "outdoor", "flexible", "unknown", null]
+            },
+            "updated_at": {
+              "type": ["string", "null"],
+              "format": "date-time"
+            }
+          }
+        },
+        "behavior_memory": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/feedback_event"
+          }
+        },
+        "explicit_profile": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "default_budget_level": {
+              "enum": ["free", "low", "medium", "high", "unknown", null]
+            },
+            "dietary_constraints": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "travel_preference": {
+              "enum": ["none", "short", "medium", "long", "unknown", null]
+            },
+            "user_editable": {
+              "type": "boolean",
+              "const": true
+            }
+          }
+        }
+      }
+    }
+  }
+}

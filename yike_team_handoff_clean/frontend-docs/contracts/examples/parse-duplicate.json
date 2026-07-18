@@ -1,0 +1,8 @@
+{
+  "draft_card_id": "draft-duplicate-001",
+  "duplicate_candidates": [
+    { "card_id": "personal-001", "title": "看《机器人之梦》", "similarity": 0.94 }
+  ],
+  "allowed_actions": ["merge", "replace", "create_anyway"]
+}
+

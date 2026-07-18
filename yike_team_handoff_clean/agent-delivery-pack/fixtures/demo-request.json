@@ -1,0 +1,19 @@
+{
+  "user_id": "demo_user",
+  "session_id": "session_001",
+  "location": {
+    "city": "Shanghai",
+    "timezone": "Asia/Shanghai"
+  },
+  "context_input": {
+    "available_time": 110,
+    "energy_level": "low",
+    "go_out": false,
+    "people": "solo",
+    "budget_level": "low",
+    "active_constraints": [],
+    "mode_preference": ["relax", "quiet"]
+  },
+  "source_scope": "both",
+  "seed": 7
+}

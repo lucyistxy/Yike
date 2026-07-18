@@ -1,0 +1,22 @@
+project_id = "yike-local-demo"
+
+[functions.recommendations]
+verify_jwt = true
+
+[functions.feedback]
+verify_jwt = true
+
+[functions.card-drafts]
+verify_jwt = true
+
+[functions.cards]
+verify_jwt = true
+
+[functions.preset-pool]
+verify_jwt = true
+
+[functions.weather-context]
+verify_jwt = true
+
+[functions.profile]
+verify_jwt = true

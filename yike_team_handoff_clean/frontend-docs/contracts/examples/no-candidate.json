@@ -1,0 +1,10 @@
+{
+  "type": "no_candidate",
+  "message": "这些条件有点严格，这次没有硬抽一个不合适的结果。",
+  "excluded_counts": { "duration": 8, "outing": 5, "constraint": 2 },
+  "relax_suggestions": [
+    { "field": "available_time_min", "label": "把可用时间放宽到 60 分钟", "value": 60 },
+    { "field": "source_scope", "label": "同时看看产品推荐", "value": "both" }
+  ]
+}
+

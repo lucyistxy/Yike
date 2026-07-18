@@ -1,0 +1,23 @@
+{
+  "type": "draw_result",
+  "card": {
+    "card_id": "preset-podcast-002",
+    "title": "泡一杯热饮，听完一集播客",
+    "content_category": "other",
+    "duration_min": 30,
+    "duration_max": 45,
+    "energy_level": "low",
+    "indoor_outdoor": "indoor",
+    "prep_cost": "low",
+    "source_type": "preset",
+    "status": "active",
+    "eligible_for_draw": true,
+    "missing_fields": []
+  },
+  "reasons": ["能在 45 分钟内开始", "不需要出门", "准备成本很低"],
+  "score": 82,
+  "weight": 1,
+  "candidate_count": 3,
+  "candidate_version": "preset-2026-07-18"
+}
+

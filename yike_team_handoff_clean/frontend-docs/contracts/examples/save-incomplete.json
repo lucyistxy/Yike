@@ -1,0 +1,14 @@
+{
+  "saved_card": {
+    "card_id": "personal-incomplete-001",
+    "title": "看看这张收藏",
+    "content_category": "other",
+    "source_type": "personal",
+    "status": "active",
+    "eligible_for_draw": false,
+    "missing_fields": ["duration_min", "energy_level", "indoor_outdoor", "prep_cost"]
+  },
+  "eligible_for_draw": false,
+  "missing_fields": ["duration_min", "energy_level", "indoor_outdoor", "prep_cost"]
+}
+

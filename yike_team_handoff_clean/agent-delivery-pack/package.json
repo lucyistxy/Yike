@@ -1,0 +1,14 @@
+{
+  "name": "yike-agent-delivery-pack",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Supabase-oriented delivery pack for Yike recommendation agent core.",
+  "scripts": {
+    "test": "node tests/run_core_fixture.mjs",
+    "check": "node --check src/core/recommendationCore.mjs && node --check tests/run_core_fixture.mjs"
+  },
+  "devDependencies": {
+    "supabase": "^2.109.1"
+  }
+}

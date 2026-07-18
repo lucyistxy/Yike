@@ -1,0 +1,7 @@
+{
+  "code": "FEEDBACK_FAILED",
+  "message": "反馈暂时没有写入，但不影响你继续使用",
+  "retryable": true,
+  "request_id": "req-feedback-failure-001"
+}
+

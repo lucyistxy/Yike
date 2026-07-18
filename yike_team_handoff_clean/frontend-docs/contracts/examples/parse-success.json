@@ -1,0 +1,23 @@
+{
+  "draft_card": {
+    "card_id": "draft-001",
+    "title": "看《机器人之梦》",
+    "content_category": "movie",
+    "duration_min": 90,
+    "duration_max": 110,
+    "energy_level": "low",
+    "indoor_outdoor": "indoor",
+    "prep_cost": "low",
+    "source_type": "personal",
+    "status": "active",
+    "eligible_for_draw": true,
+    "missing_fields": []
+  },
+  "field_confidence": [
+    { "field": "title", "confidence": 0.96 },
+    { "field": "duration_min", "confidence": 0.72 }
+  ],
+  "missing_fields": [],
+  "duplicate_candidates": []
+}
+
