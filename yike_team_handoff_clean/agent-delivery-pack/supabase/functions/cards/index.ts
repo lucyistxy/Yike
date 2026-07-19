@@ -38,13 +38,14 @@ Deno.serve(async (req) => {
       if (!userId) throw new Error("user_id is required");
       await requireUserId(supabase, userId);
 
+      const serviceSupabase = createServiceClient();
       const result = await listCards(supabase, userId, {
         source_scope: normalizeSourceScope(url.searchParams.get("source_scope")),
         status: url.searchParams.get("status"),
         eligible_only: url.searchParams.get("eligible_only") === "true",
         q: url.searchParams.get("q"),
         limit: Number(url.searchParams.get("limit") ?? 100)
-      });
+      }, serviceSupabase);
 
       return json(result);
     }

@@ -110,7 +110,7 @@ export type DrawCardResult =
       relax_suggestions: Array<{ field: string; label: string; value: string | number | boolean }>;
     };
 
-export type FeedbackAction = "accept" | "complete" | "not_suitable" | "later" | "dislike";
+export type FeedbackAction = "accept" | "complete" | "reroll" | "not_suitable" | "later" | "dislike";
 
 export interface FeedbackResult {
   card_id: string;
@@ -173,9 +173,54 @@ export interface SaveProfileInput {
   preference_memory?: Record<string, unknown>;
 }
 
+export type MemoryItemAction = "keep" | "view" | "clear";
+
+export interface MemorySummary {
+  user_id: string;
+  generated_at: string;
+  feedback_calendar: {
+    year: number;
+    month: number;
+    month_label: string;
+    current_day: number;
+    active_days: number[];
+    pearl_count: number;
+    feedback_count: number;
+    positive_count: number;
+    completed_count: number;
+  };
+  long_term_preference: {
+    headline: string;
+    tags: Array<{ label: string; value: string }>;
+    evidence: string;
+  };
+  memory_items: Array<{
+    item_key: string;
+    title: string;
+    description: string;
+    source: string;
+    action_state: "active" | "kept" | "cleared";
+    evidence_count: number;
+    last_seen_at: string | null;
+    detail: Record<string, unknown>;
+  }>;
+  non_persistent: Array<{ label: string; reason: string }>;
+}
+
+export interface MemoryItemActionResult {
+  ok: boolean;
+  item_key: string;
+  action: MemoryItemAction;
+  updated: boolean;
+  item: MemorySummary["memory_items"][number] | null;
+  summary: MemorySummary;
+}
+
 export interface AgentGateway {
   getProfile(): Promise<UserProfile>;
   saveProfile(input: SaveProfileInput): Promise<UserProfile>;
+  getMemorySummary(): Promise<MemorySummary>;
+  updateMemoryItem(input: { item_key: string; action: MemoryItemAction }): Promise<MemoryItemActionResult>;
   listCards(input?: { source_scope?: SourceScope; status?: CardStatus; eligible_only?: boolean; q?: string; limit?: number }): Promise<{ cards: Card[]; count: number }>;
   getWeatherContext(input: { city?: string | null; timezone?: string | null; latitude?: number | null; longitude?: number | null }): Promise<WeatherContext>;
   parseCard(input: ParseCardInput): Promise<ParseCardResult>;

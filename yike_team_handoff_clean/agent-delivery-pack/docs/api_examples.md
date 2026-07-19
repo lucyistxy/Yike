@@ -202,6 +202,41 @@ curl -X POST "$SUPABASE_URL/functions/v1/profile" \
 
 `profile` 写入的是 `user_memory.explicit_profile`；其中 `preferred_categories`、`disliked_categories`、`default_available_time`、`indoor_outdoor_preference` 会同步生成推荐可用的轻量 `preference_memory`。
 
+## memory
+
+读取新记忆页需要的三块数据：贝壳日历、长期偏好、记忆清单。
+
+```bash
+curl "$SUPABASE_URL/functions/v1/memory?user_id=00000000-0000-0000-0000-000000000001" \
+  -H "Authorization: Bearer $USER_ACCESS_TOKEN"
+```
+
+记忆清单条目操作：
+
+```bash
+curl -X POST "$SUPABASE_URL/functions/v1/memory" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $USER_ACCESS_TOKEN" \
+  -d '{
+    "user_id": "00000000-0000-0000-0000-000000000001",
+    "item_key": "pref_indoor",
+    "action": "keep"
+  }'
+```
+
+`action` 支持：
+
+```text
+keep, view, clear
+```
+
+输出给前端的核心字段：
+
+- `feedback_calendar`：当月有反馈的日期、珍珠数量、完成次数。
+- `long_term_preference`：如 `室内 · 低准备 · 45 分钟`，以及可展示的小标签。
+- `memory_items`：最多三条可解释记忆，每条支持保留、查看、清除。
+- `non_persistent`：右侧固定说明，提示不会长期记住的敏感/临时状态。
+
 ## weather-context
 
 ```bash

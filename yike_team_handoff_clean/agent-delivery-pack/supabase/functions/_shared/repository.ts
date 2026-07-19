@@ -25,7 +25,7 @@ type ProfilePayload = {
   onboarding_completed?: boolean;
 };
 
-export async function loadCards(supabase: SupabaseClient, userId: string, sourceScope: SourceScope): Promise<Card[]> {
+export async function loadCards(supabase: SupabaseClient, userId: string, sourceScope: SourceScope, storageSupabase: SupabaseClient = supabase): Promise<Card[]> {
   let query = supabase
     .from("entertainment_cards")
     .select("*")
@@ -37,13 +37,14 @@ export async function loadCards(supabase: SupabaseClient, userId: string, source
 
   const { data, error } = await query;
   if (error) throw new Error(`load_cards_failed: ${error.message}`);
-  return withSignedCardImages(supabase, (data ?? []).map(mapCardRow));
+  return withSignedCardImages(storageSupabase, (data ?? []).map(mapCardRow));
 }
 
 export async function listCards(
   supabase: SupabaseClient,
   userId: string,
-  options: CardListOptions = {}
+  options: CardListOptions = {},
+  storageSupabase: SupabaseClient = supabase
 ) {
   const sourceScope = options.source_scope ?? "personal";
   const limit = Math.max(1, Math.min(Number(options.limit ?? 100), 200));
@@ -62,7 +63,7 @@ export async function listCards(
   if (error) throw new Error(`list_cards_failed: ${error.message}`);
 
   const q = options.q?.trim().toLowerCase();
-  const cards = await withSignedCardImages(supabase, (data ?? []).map(mapCardRow).filter((card) => {
+  const cards = await withSignedCardImages(storageSupabase, (data ?? []).map(mapCardRow).filter((card) => {
     if (!q) return true;
     return [card.title, card.subtitle, card.description, card.content_category, ...(card.mood_tags ?? [])]
       .filter(Boolean)
@@ -737,7 +738,7 @@ export async function writeFeedback(
 function buildCardFeedbackPatch(action: FeedbackAction, feedbackSummary: Record<string, number>) {
   const now = new Date();
   const cooldownHours: Record<FeedbackAction, number> = {
-    accept: 12,
+    accept: 0,
     complete: 72,
     reroll: 2,
     not_suitable: 12,
@@ -751,7 +752,7 @@ function buildCardFeedbackPatch(action: FeedbackAction, feedbackSummary: Record<
 
   return {
     feedback_summary: feedbackSummary,
-    status: action === "save_preset" ? "active" : "cooling",
+    status: action === "complete" ? "completed" : action === "dislike" ? "archived" : coolingUntil ? "cooling" : "active",
     cooling_until: coolingUntil,
     updated_at: now.toISOString()
   };

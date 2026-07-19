@@ -220,7 +220,7 @@ export function recommend(request, cards, memory, now = new Date()) {
 
 export function feedbackEffect(action) {
   const effects = {
-    accept: { short_term: "本会话不重复推荐", long_term: "相关类别轻微加权", cooldown_hours: 12 },
+    accept: { short_term: "记录本次选择，本会话不重复推荐", long_term: "相关类别轻微加权", cooldown_hours: 0 },
     complete: { short_term: "记录完成和真实体验", long_term: "相似内容适度加权", cooldown_hours: 72 },
     reroll: { short_term: "当前卡本轮短降权", long_term: "不形成长期不喜欢", cooldown_hours: 2 },
     not_suitable: { short_term: "短期冷却当前卡", long_term: "不形成长期不喜欢", cooldown_hours: 12 },

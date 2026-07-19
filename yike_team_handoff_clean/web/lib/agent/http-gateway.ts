@@ -6,6 +6,9 @@ import type {
   DrawContext,
   FeedbackAction,
   FeedbackResult,
+  MemoryItemAction,
+  MemoryItemActionResult,
+  MemorySummary,
   ParseCardInput,
   ParseCardResult,
   SaveProfileInput,
@@ -64,6 +67,25 @@ export class HttpAgentGateway implements AgentGateway {
         onboarding_completed: input.onboarding_completed,
         explicit_profile: input.explicit_profile,
         preference_memory: input.preference_memory,
+      },
+    });
+  }
+
+  async getMemorySummary(): Promise<MemorySummary> {
+    const auth = await this.getAuth();
+    return this.request<MemorySummary>(`memory?user_id=${encodeURIComponent(auth.userId)}`, {
+      method: "GET",
+    });
+  }
+
+  async updateMemoryItem(input: { item_key: string; action: MemoryItemAction }): Promise<MemoryItemActionResult> {
+    const auth = await this.getAuth();
+    return this.request<MemoryItemActionResult>("memory", {
+      method: "POST",
+      body: {
+        user_id: auth.userId,
+        item_key: input.item_key,
+        action: input.action,
       },
     });
   }

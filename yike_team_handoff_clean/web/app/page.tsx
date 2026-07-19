@@ -5,7 +5,7 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createAgentGateway } from "../lib/agent";
 import { clearAuthSession, persistAuthSession } from "../lib/agent/http-gateway";
-import type { Card as ContractCard, ContentCategory, DrawContext, FeedbackAction, FeedbackResult, UserProfile, WeatherContext } from "../lib/contracts/v1";
+import type { Card as ContractCard, ContentCategory, DrawContext, FeedbackAction, FeedbackResult, MemoryItemAction, MemorySummary, UserProfile, WeatherContext } from "../lib/contracts/v1";
 
 type View = "home" | "pool" | "add" | "memory" | "result";
 type Source = "personal" | "preset";
@@ -95,7 +95,7 @@ const realAgentEnabled = Boolean(process.env.NEXT_PUBLIC_YIKE_AGENT_BASE_URL);
 
 const categoryToContract: Record<string, ContentCategory> = { 书籍: "book", 电影: "movie", 剧集: "series", 美食: "food", 展览: "exhibition", 游戏: "game", 手作: "craft", 散步: "walk", 其他: "other", 播客: "other" };
 const categoryFromContract: Record<ContentCategory, string> = { book: "书籍", movie: "电影", series: "剧集", food: "美食", exhibition: "展览", game: "游戏", craft: "手作", walk: "散步", other: "其他" };
-const feedbackActionText: Record<FeedbackAction, string> = { accept: "就它", complete: "已完成", not_suitable: "当下不合适", later: "以后再说", dislike: "不喜欢" };
+const feedbackActionText: Record<FeedbackAction, string> = { accept: "就它", complete: "已完成", reroll: "换一张", not_suitable: "当下不合适", later: "以后再说", dislike: "不喜欢" };
 const onboardingCategories = ["电影", "剧集", "书籍", "美食", "展览", "游戏", "手作", "散步"];
 const badWeatherTags = ["rain", "snow", "thunderstorm", "fog", "hot", "cold"];
 const defaultOnboardingForm: OnboardingForm = {
@@ -206,6 +206,13 @@ function buildCareNotice(card: Card, context: Context, ambient: AmbientContext) 
   return notices.join(" ");
 }
 
+function noCandidateHelp(context: Context) {
+  if (context.time >= 60) {
+    return "当前时间已经足够宽，可能是来源、出门范围或卡片冷却状态限制了候选。可以同时看看产品推荐，或把行动范围改成均可。";
+  }
+  return "这些条件有点严格。可以把可用时间放宽一点，或同时看看产品推荐。";
+}
+
 function toContractCard(card: Card): ContractCard {
   return { card_id: card.id, draft_id: card.draftId, title: card.title, content_category: categoryToContract[card.category] ?? "other", duration_min: card.duration, duration_max: card.duration, energy_level: card.energy, indoor_outdoor: card.outing, prep_cost: card.prep, image_url: card.imageUrl, image_path: card.imagePath, source_asset: card.sourceAsset, source_type: card.source, status: card.status, eligible_for_draw: card.eligible, missing_fields: card.eligible ? [] : ["duration_min", "energy_level", "indoor_outdoor", "prep_cost"] };
 }
@@ -254,6 +261,7 @@ export default function Home() {
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [feedbackInsight, setFeedbackInsight] = useState<FeedbackInsight | null>(null);
   const [memoryNote, setMemoryNote] = useState("还没有新的反馈");
+  const [memorySummary, setMemorySummary] = useState<MemorySummary | null>(null);
   const [toast, setToast] = useState("");
   const [debugLog, setDebugLog] = useState("等待第一次 Agent 调用");
   const [inputText, setInputText] = useState("");
@@ -277,7 +285,7 @@ export default function Home() {
     const savedContext = localStorage.getItem("yike-context");
     // 从浏览器存储恢复初始演示数据，只在挂载时执行一次。
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (cards) setPersonalCards(JSON.parse(cards));
+    if (cards && !(realAgentEnabled && readLocalValue("yike-user-id"))) setPersonalCards(JSON.parse(cards));
     if (savedContext) setContext({ ...DEFAULT_CONTEXT, ...JSON.parse(savedContext), constraints: [] });
   }, []);
 
@@ -305,12 +313,14 @@ export default function Home() {
     if (!realAgentEnabled || !readLocalValue("yike-user-id") || !readLocalValue("yike-user-access-token")) return;
     setCloudReady(false);
     try {
-      const [cardsResponse, profile] = await Promise.all([
+      const [cardsResponse, profile, cloudMemory] = await Promise.all([
         gatewayRef.current.listCards({ source_scope: "personal", limit: 200 }),
         gatewayRef.current.getProfile(),
+        gatewayRef.current.getMemorySummary(),
       ]);
       setPersonalCards(cardsResponse.cards.map(fromContractCard));
       setProfile(profile);
+      setMemorySummary(cloudMemory);
       if (profile.explicit_profile?.default_available_time) {
         setContext((value) => ({
           ...value,
@@ -319,9 +329,9 @@ export default function Home() {
           outing: profile.explicit_profile?.indoor_outdoor_preference === "outdoor" ? "can_go_out" : profile.explicit_profile?.indoor_outdoor_preference === "indoor" ? "stay_in" : value.outing,
         }));
       }
-      const memorySummary = summarizePreferenceMemory(profile);
-      setMemoryNote(memorySummary ? `云端记忆已恢复：${memorySummary}` : "云端记忆已连接，暂无明显长期偏好");
-      setDebugLog(JSON.stringify({ method: "restoreCloudState", reason, cards: cardsResponse.count, memory: profile.preference_memory ?? {} }, null, 2));
+      const memoryText = cloudMemory.long_term_preference?.headline || summarizePreferenceMemory(profile);
+      setMemoryNote(memoryText ? `云端记忆已恢复：${memoryText}` : "云端记忆已连接，暂无明显长期偏好");
+      setDebugLog(JSON.stringify({ method: "restoreCloudState", reason, cards: cardsResponse.count, memory: cloudMemory }, null, 2));
       if (reason !== "startup") showToast("已同步云端卡池和记忆");
     } catch (error) {
       const message = error instanceof Error ? error.message : "云端数据同步失败";
@@ -329,6 +339,21 @@ export default function Home() {
       if (!message.includes("requires yike-user-id")) showToast(message);
     } finally {
       setCloudReady(true);
+    }
+  }, [showToast]);
+
+  const updateMemoryItem = useCallback(async (itemKey: string, action: MemoryItemAction) => {
+    try {
+      const response = await gatewayRef.current.updateMemoryItem({ item_key: itemKey, action });
+      setMemorySummary(response.summary);
+      setDebugLog(JSON.stringify({ method: "updateMemoryItem", request: { item_key: itemKey, action }, response }, null, 2));
+      if (action === "view") showToast(response.item?.description ?? "这条记忆来自近期反馈和卡片字段");
+      if (action === "keep") showToast("已保留这条记忆");
+      if (action === "clear") showToast("已清除这条记忆");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "记忆操作失败";
+      setDebugLog(JSON.stringify({ method: "updateMemoryItem", request: { item_key: itemKey, action }, error: message }, null, 2));
+      showToast(message);
     }
   }, [showToast]);
 
@@ -434,6 +459,15 @@ export default function Home() {
   };
 
   const exchange = async () => {
+    if (result && !feedbackSubmitting && isUuid(result.id)) {
+      try {
+        const response = await gatewayRef.current.submitFeedback({ card_id: result.id, action: "reroll" });
+        setDebugLog(JSON.stringify({ method: "submitFeedback", request: { card_id: result.id, action: "reroll" }, response }, null, 2));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "换一张反馈记录失败";
+        setDebugLog(JSON.stringify({ method: "submitFeedback", request: { card_id: result.id, action: "reroll" }, error: message }, null, 2));
+      }
+    }
     const count = exchangeCount + 1;
     setExchangeCount(count);
     if (count >= 3) {
@@ -690,7 +724,7 @@ export default function Home() {
 
         {appReady && view === "pool" && <PoolView cards={personalCards} onAdd={() => go("add")} onArchive={archiveCard} onDelete={deleteCard} />}
 
-        {appReady && view === "memory" && <MemoryView memoryNote={memoryNote} feedbackInsight={feedbackInsight} debugLog={debugLog} onReset={() => { setPersonalCards([]); setContext(DEFAULT_CONTEXT); setRecentIds([]); setFeedbackInsight(null); setMemoryNote("还没有新的反馈"); showToast("演示数据已重置"); }} />}
+        {appReady && view === "memory" && <MemoryView memoryNote={memoryNote} memorySummary={memorySummary} feedbackInsight={feedbackInsight} debugLog={debugLog} onMemoryAction={updateMemoryItem} onReset={() => { setPersonalCards([]); setContext(DEFAULT_CONTEXT); setRecentIds([]); setFeedbackInsight(null); setMemoryNote("还没有新的反馈"); setMemorySummary(null); showToast("演示数据已重置"); }} />}
 
         {appReady && view === "result" && result && <ResultView
           card={result}
@@ -700,6 +734,7 @@ export default function Home() {
           feedbackSubmitting={feedbackSubmitting}
           feedbackInsight={feedbackInsight}
           careNotice={careNotice}
+          ambient={ambient}
           setFeedbackOpen={setFeedbackOpen}
           onAccept={() => submitFeedback("accept")}
           onExchange={exchange}
@@ -876,7 +911,7 @@ function HomeView({ context, contextSummary, ambient, drawing, noCandidate, pers
       <button className="primary-button draw-button" onClick={onDraw} disabled={drawing}>{drawing ? "正在匹配此刻…" : "抽一张"}</button>
     </section>
 
-    {noCandidate && <EmptyState title="这次没有硬抽一个不合适的结果" body="这些条件有点严格。可以把时间放宽到 60 分钟，或同时看看产品推荐。" action="放宽一个条件" onAction={() => setContext((value) => ({ ...value, time: 60, source: "both" }))} />}
+    {noCandidate && <EmptyState title="这次没有硬抽一个不合适的结果" body={noCandidateHelp(context)} action="放宽一个条件" onAction={() => setContext((value) => ({ ...value, time: Math.max(value.time, 60), source: "both", outing: "can_go_out" }))} />}
     {personalCount === 0 && <div className="cold-start"><div className="mini-shell">◇</div><div><strong>你的个人卡池还是空的</strong><p>先从产品推荐开始，或收进一张真正想做的事。</p></div><button onClick={onAdd}>添加收藏</button></div>}
   </div>;
 }
@@ -918,11 +953,11 @@ function PoolView({ cards, onAdd, onArchive, onDelete }: { cards: Card[]; onAdd:
   return <div className="view pool-view"><div className="eyebrow">COLLECTION · 我的海湾</div><div className="page-title"><div><h1>收进来的好故事</h1><p>不是待办清单，只是一片随时可以回来打捞的海湾。</p></div><button className="primary-button compact" onClick={onAdd}>＋ 添加收藏</button></div><div className="pool-toolbar"><div className="search-box">⌕<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题或类别" /></div><div className="pool-count"><strong>{cards.length}</strong><span>张我的卡</span></div></div>{cards.length === 0 ? <EmptyState title="海湾里还没有卡片" body="先收进一张真正感兴趣的娱乐收藏吧。" action="添加一张" onAction={onAdd} /> : <div className="card-grid">{visible.map((card) => <article className="pool-card" key={card.id}><div className={`pool-card-art ${card.imageUrl ? "has-image" : ""}`}>{card.imageUrl ? <img src={card.imageUrl} alt={card.title} /> : <><span>◇</span><small>{card.category}</small></>}</div><div className="pool-card-body"><div><SourceBadge source={card.source} /><span className={`status-pill ${card.status}`}>{card.status === "active" ? "可抽取" : card.status}</span></div><h3>{card.title}</h3><p>{card.duration} 分钟 · {card.outing === "indoor" ? "室内" : "室外"} · {levelText[card.prep]}准备</p><div className="pool-actions"><button>编辑</button>{card.status === "archived" ? <button className="danger" onClick={() => onDelete(card.id)}>删除</button> : <button onClick={() => onArchive(card.id)}>归档</button>}</div></div></article>)}</div>}</div>;
 }
 
-function ResultView({ card, reasons, drawing, feedbackOpen, feedbackSubmitting, feedbackInsight, careNotice, setFeedbackOpen, onAccept, onExchange, onContext, onFeedback, onCopy }: {
-  card: Card; reasons: string[]; drawing: boolean; feedbackOpen: boolean; feedbackSubmitting: boolean; feedbackInsight: FeedbackInsight | null; careNotice: string; setFeedbackOpen: (value: boolean) => void;
+function ResultView({ card, reasons, drawing, feedbackOpen, feedbackSubmitting, feedbackInsight, careNotice, ambient, setFeedbackOpen, onAccept, onExchange, onContext, onFeedback, onCopy }: {
+  card: Card; reasons: string[]; drawing: boolean; feedbackOpen: boolean; feedbackSubmitting: boolean; feedbackInsight: FeedbackInsight | null; careNotice: string; ambient: AmbientContext; setFeedbackOpen: (value: boolean) => void;
   onAccept: () => void; onExchange: () => void; onContext: () => void; onFeedback: (action: "complete" | "not-suitable" | "later" | "dislike") => void; onCopy: () => void;
 }) {
-  return <div className="view result-view"><div className="eyebrow">REVEAL · 今晚的卡</div><div className="result-heading"><div><h1>今晚，就从这一件开始</h1><p>只给一张，也告诉你为什么是它。</p></div><img src="/otter-side.png" alt="为你揭晓结果的海獭小宜" /></div><article className={`result-card ${drawing ? "switching" : ""}`}><div className={`result-art ${card.imageUrl ? "has-image" : ""}`}>{card.imageUrl ? <img src={card.imageUrl} alt={card.title} /> : <><div className="window-shape"><span /></div><div className="cup-shape" /><div className="result-moon" /><span className="result-shell">◇</span></>}</div><div className="result-content"><div className="result-badges"><SourceBadge source={card.source} /><span>{card.category}</span></div><h2>{card.title}</h2><p className="result-meta">预计 {card.duration} 分钟　·　{card.outing === "indoor" ? "室内" : card.outing === "outdoor" ? "室外" : "均可"}　·　{levelText[card.prep]}准备</p><div className="reason-block"><strong>为什么现在适合</strong>{reasons.map((reason) => <p key={reason}><span>●</span>{reason}</p>)}</div><div className="companion-line">小宜：今晚只把节奏放慢一点，也很好。</div></div></article>{careNotice && <div className="care-notice"><span>关怀提醒</span><p>{careNotice}</p></div>}<div className="result-actions"><button className="primary-button" onClick={onAccept} disabled={feedbackSubmitting}>{feedbackSubmitting ? "记录中…" : "就它"}</button><div><button className="secondary-button" onClick={onExchange} disabled={feedbackSubmitting}>换一张</button><button className="secondary-button" onClick={onContext} disabled={feedbackSubmitting}>改条件</button></div>{card.source === "preset" && <button className="text-button" onClick={onCopy} disabled={feedbackSubmitting}>存成我的卡</button>}<button className="feedback-link" onClick={() => setFeedbackOpen(!feedbackOpen)} disabled={feedbackSubmitting}>{feedbackOpen ? "收起反馈" : "这张卡怎么样？"}</button></div>{feedbackInsight && <FeedbackInsightPanel insight={feedbackInsight} />}{feedbackOpen && <div className="feedback-grid"><Feedback title="已完成" impact="长期加权" body="记录真实体验，轻轻增加相似内容" disabled={feedbackSubmitting} onClick={() => onFeedback("complete")} /><Feedback title="当下不合适" impact="仅短期" body="只做短期调整，不理解为讨厌" disabled={feedbackSubmitting} onClick={() => onFeedback("not-suitable")} /><Feedback title="以后再说" impact="冷却保留" body="保留兴趣，先放回稍后口袋" disabled={feedbackSubmitting} onClick={() => onFeedback("later")} /><Feedback title="不喜欢" impact="长期降权" body="显著减少类似内容，仍可撤回" disabled={feedbackSubmitting} onClick={() => onFeedback("dislike")} /></div>}</div>;
+  return <div className="view result-view"><div className="eyebrow">REVEAL · 今晚的卡</div><div className="result-heading"><div><h1>今晚，就从这一件开始</h1><p>只给一张，也告诉你为什么是它。</p></div><img src="/otter-side.png" alt="为你揭晓结果的海獭小宜" /></div><article className={`result-card ${drawing ? "switching" : ""}`}><div className={`result-art ${card.imageUrl ? "has-image" : ""}`}>{card.imageUrl ? <img src={card.imageUrl} alt={card.title} /> : <><div className="window-shape"><span /></div><div className="cup-shape" /><div className="result-moon" /><span className="result-shell">◇</span></>}</div><div className="result-content"><div className="result-badges"><SourceBadge source={card.source} /><span>{card.category}</span></div><h2>{card.title}</h2><p className="result-meta">预计 {card.duration} 分钟　·　{card.outing === "indoor" ? "室内" : card.outing === "outdoor" ? "室外" : "均可"}　·　{levelText[card.prep]}准备</p><div className="reason-block"><strong>为什么现在适合</strong>{reasons.map((reason) => <p key={reason}><span>●</span>{reason}</p>)}</div><div className="companion-line">小宜：今晚只把节奏放慢一点，也很好。</div></div></article><div className="context-trace"><span>本次参考</span><strong>{ambient.localTime} · {weatherText(ambient.weather)}</strong></div>{careNotice && <div className="care-notice"><span>关怀提醒</span><p>{careNotice}</p></div>}<div className="result-actions"><button className="primary-button" onClick={onAccept} disabled={feedbackSubmitting}>{feedbackSubmitting ? "记录中…" : "就它"}</button><div><button className="secondary-button" onClick={onExchange} disabled={feedbackSubmitting}>换一张</button><button className="secondary-button" onClick={onContext} disabled={feedbackSubmitting}>改条件</button></div>{card.source === "preset" && <button className="text-button" onClick={onCopy} disabled={feedbackSubmitting}>存成我的卡</button>}<button className="feedback-link" onClick={() => setFeedbackOpen(!feedbackOpen)} disabled={feedbackSubmitting}>{feedbackOpen ? "收起反馈" : "这张卡怎么样？"}</button></div>{feedbackInsight && <FeedbackInsightPanel insight={feedbackInsight} />}{feedbackOpen && <div className="feedback-grid"><Feedback title="已完成" impact="长期加权" body="记录真实体验，轻轻增加相似内容" disabled={feedbackSubmitting} onClick={() => onFeedback("complete")} /><Feedback title="当下不合适" impact="仅短期" body="只做短期调整，不理解为讨厌" disabled={feedbackSubmitting} onClick={() => onFeedback("not-suitable")} /><Feedback title="以后再说" impact="冷却保留" body="保留兴趣，先放回稍后口袋" disabled={feedbackSubmitting} onClick={() => onFeedback("later")} /><Feedback title="不喜欢" impact="长期降权" body="显著减少类似内容，仍可撤回" disabled={feedbackSubmitting} onClick={() => onFeedback("dislike")} /></div>}</div>;
 }
 
 function FeedbackInsightPanel({ insight }: { insight: FeedbackInsight }) {
@@ -933,6 +968,12 @@ function Feedback({ title, impact, body, disabled, onClick }: { title: string; i
   return <button className="feedback-card" type="button" disabled={disabled} onClick={onClick}><span>◇</span><div><strong>{title}<em>{impact}</em></strong><small>{body}</small></div></button>;
 }
 
-function MemoryView({ memoryNote, feedbackInsight, debugLog, onReset }: { memoryNote: string; feedbackInsight: FeedbackInsight | null; debugLog: string; onReset: () => void }) {
-  return <div className="view memory-view"><div className="eyebrow">MEMORY · 可见且克制</div><div className="page-title"><div><h1>小宜记得什么</h1><p>偏好可以查看、修改、清除；敏感状态不会长期保存。</p></div></div><div className="memory-grid"><section className="memory-card blue"><span>本次反馈</span><h2>{memoryNote}</h2><p>{feedbackInsight ? `${feedbackInsight.shortTerm}；${feedbackInsight.cooldown}。` : "你可以随时撤回，系统不会据此建立人格或健康标签。"}</p></section><section className="memory-card"><span>长期偏好</span><h2>{feedbackInsight ? feedbackInsight.memoryShift : "室内 · 低准备 · 45 分钟"}</h2><p>{feedbackInsight ? feedbackInsight.longTerm : "这里只展示用户主动选择和可解释的行为信号。"}</p></section></div>{feedbackInsight && <FeedbackInsightPanel insight={feedbackInsight} />}<section className="debug-panel"><div><span>FRONTEND ↔ AGENT</span><b>v1.0</b></div><h2>最后一次调用</h2><pre>{debugLog}</pre></section><button className="secondary-button" onClick={onReset}>重置演示数据</button></div>;
+function MemoryView({ memoryNote, memorySummary, feedbackInsight, debugLog, onMemoryAction, onReset }: { memoryNote: string; memorySummary: MemorySummary | null; feedbackInsight: FeedbackInsight | null; debugLog: string; onMemoryAction: (itemKey: string, action: MemoryItemAction) => void; onReset: () => void }) {
+  const calendar = memorySummary?.feedback_calendar;
+  const preference = memorySummary?.long_term_preference;
+  const memoryItems = memorySummary?.memory_items ?? [];
+  const pearlText = calendar ? `本月拾到 ${calendar.pearl_count} 颗小珍珠` : memoryNote;
+  const activeDaysText = calendar && calendar.active_days.length > 0 ? `有反馈的日期：${calendar.active_days.join("、")} 日` : "还没有形成可展示的反馈日历";
+
+  return <div className="view memory-view"><div className="eyebrow">MEMORY · 可见且克制</div><div className="page-title"><div><h1>小宜记得什么</h1><p>偏好可以查看、保留、清除；敏感状态不会长期保存。</p></div></div><div className="memory-grid"><section className="memory-card blue"><span>本次反馈 · 贝壳日历数据</span><h2>{pearlText}</h2><p>{calendar ? `${calendar.month_label} · ${activeDaysText}。完成 ${calendar.completed_count} 次，正向反馈 ${calendar.positive_count} 次。` : "前端贝壳日历 UI 接入后，将直接使用这里的月份、日期和珍珠数量。"}</p></section><section className="memory-card"><span>长期偏好</span><h2>{preference?.headline ?? (feedbackInsight ? feedbackInsight.memoryShift : "室内 · 低准备 · 45 分钟")}</h2><div className="memory-tags">{(preference?.tags ?? [{ label: "活动场景", value: "室内" }, { label: "准备程度", value: "低" }, { label: "可用时长", value: "45 分钟" }]).map((tag) => <em key={`${tag.label}-${tag.value}`}>{tag.label}：{tag.value}</em>)}</div><p>{preference?.evidence ?? (feedbackInsight ? feedbackInsight.longTerm : "这里只展示用户主动选择和可解释的行为信号。")}</p></section></div><div className="memory-layout"><section className="memory-list"><div><h2>记忆清单</h2><span>以下为可解释、可管理的行为信号。</span></div>{memoryItems.length === 0 ? <p className="memory-empty">暂无可展示记忆，完成几次抽卡反馈后会自动替换这里的三条内容。</p> : memoryItems.map((item) => <article key={item.item_key} className="memory-row"><div><strong>{item.title}</strong><p>{item.description}</p><small>{item.source}{item.action_state === "kept" ? " · 已保留" : ""}</small></div><div><button onClick={() => onMemoryAction(item.item_key, "keep")}>保留</button><button onClick={() => onMemoryAction(item.item_key, "view")}>查看</button><button className="danger" onClick={() => onMemoryAction(item.item_key, "clear")}>清除</button></div></article>)}</section><aside className="memory-static"><h2>不会被记住的事</h2>{(memorySummary?.non_persistent ?? [{ label: "经期不适", reason: "只在当次会话中使用" }, { label: "不久站", reason: "只影响本次硬过滤" }, { label: "不需妆容", reason: "只用于当次准备成本判断" }]).map((item) => <p key={item.label}><strong>{item.label}</strong><span>{item.reason}</span></p>)}</aside></div>{feedbackInsight && <FeedbackInsightPanel insight={feedbackInsight} />}<section className="debug-panel"><div><span>FRONTEND ↔ AGENT</span><b>v1.0</b></div><h2>最后一次调用</h2><pre>{debugLog}</pre></section><button className="secondary-button" onClick={onReset}>重置演示数据</button></div>;
 }

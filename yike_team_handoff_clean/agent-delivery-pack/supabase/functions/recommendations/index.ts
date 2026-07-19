@@ -1,6 +1,6 @@
 import { recommend, type RecommendationRequest } from "../_shared/recommendationCore.ts";
 import { loadCards, loadMemory, writeRecommendationLog } from "../_shared/repository.ts";
-import { createRequestClient, requestHeaders, requireUserId } from "../_shared/supabaseClient.ts";
+import { createRequestClient, createServiceClient, requestHeaders, requireUserId } from "../_shared/supabaseClient.ts";
 
 type RecommendationPayload = RecommendationRequest;
 
@@ -22,7 +22,8 @@ Deno.serve(async (req) => {
     const supabase = createRequestClient(req);
     await requireUserId(supabase, payload.user_id);
 
-    const cards = await loadCards(supabase, payload.user_id, payload.source_scope);
+    const serviceSupabase = createServiceClient();
+    const cards = await loadCards(supabase, payload.user_id, payload.source_scope, serviceSupabase);
     const memory = await loadMemory(supabase, payload.user_id);
 
     const result = recommend(payload, cards, memory);
@@ -53,14 +54,23 @@ function validatePayload(payload: RecommendationPayload) {
 
 function toFrontendDrawShape(result: ReturnType<typeof recommend>) {
   if (!result.selected_card) {
-    return {
-      type: "no_candidate",
-      message: "当前条件下没有合适的娱乐卡，可以放宽时间、出门或预算限制。",
-      excluded_counts: result.excluded_summary,
-      relax_suggestions: [
+    const availableTime = Number(result.context_snapshot.context_input.available_time ?? 0);
+    const relaxSuggestions = availableTime >= 60
+      ? [
+        { field: "source_scope", label: "同时看看产品推荐", value: "both" },
+        { field: "go_out", label: "允许室内外都可", value: true }
+      ]
+      : [
         { field: "available_time", label: "放宽可用时间", value: 60 },
         { field: "source_scope", label: "同时看看产品推荐", value: "both" }
-      ]
+      ];
+    return {
+      type: "no_candidate",
+      message: availableTime >= 60
+        ? "当前时间已经足够宽，可能是来源、出门范围或卡片冷却状态限制了候选。"
+        : "当前条件下没有合适的娱乐卡，可以放宽时间、出门或预算限制。",
+      excluded_counts: result.excluded_summary,
+      relax_suggestions: relaxSuggestions
     };
   }
 
