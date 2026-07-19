@@ -5,7 +5,7 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createAgentGateway } from "../lib/agent";
 import { clearAuthSession, persistAuthSession } from "../lib/agent/http-gateway";
-import type { Card as ContractCard, ContentCategory, DrawContext, FeedbackAction, FeedbackResult, MemoryItemAction, MemorySummary, UserProfile, WeatherContext } from "../lib/contracts/v1";
+import type { ActivityHistoryEvent, Card as ContractCard, ContentCategory, DrawContext, FeedbackAction, FeedbackResult, MemoryItemAction, MemorySummary, UserProfile, WeatherContext } from "../lib/contracts/v1";
 
 type View = "home" | "pool" | "add" | "memory" | "result";
 type Source = "personal" | "preset";
@@ -95,6 +95,17 @@ const realAgentEnabled = Boolean(process.env.NEXT_PUBLIC_YIKE_AGENT_BASE_URL);
 
 const categoryToContract: Record<string, ContentCategory> = { 书籍: "book", 电影: "movie", 剧集: "series", 美食: "food", 展览: "exhibition", 游戏: "game", 手作: "craft", 散步: "walk", 其他: "other", 播客: "other" };
 const categoryFromContract: Record<ContentCategory, string> = { book: "书籍", movie: "电影", series: "剧集", food: "美食", exhibition: "展览", game: "游戏", craft: "手作", walk: "散步", other: "其他" };
+const shellCategories: Array<{ category: string; contract: ContentCategory; image: string; note: string }> = [
+  { category: "书籍", contract: "book", image: "/art/yike/shell-scallop.webp", note: "一页一页展开" },
+  { category: "电影", contract: "movie", image: "/art/yike/shell-nautilus.webp", note: "让故事慢慢旋转" },
+  { category: "剧集", contract: "series", image: "/art/yike/shell-cowrie.webp", note: "留住连续的期待" },
+  { category: "美食", contract: "food", image: "/art/yike/shell-pearl.webp", note: "收藏一口好滋味" },
+  { category: "展览", contract: "exhibition", image: "/art/yike/shell-cream-conch.webp", note: "把灵感带回海湾" },
+  { category: "游戏", contract: "game", image: "/art/yike/shell-spiral-conch.webp", note: "进入一个小世界" },
+  { category: "手作", contract: "craft", image: "/art/yike/shell-sand-dollar.webp", note: "在手心慢慢成形" },
+  { category: "散步", contract: "walk", image: "/art/yike/shell-limpet.webp", note: "沿着风去走一走" },
+  { category: "其他", contract: "other", image: "/art/yike/shell-murex.webp", note: "还没被命名的惊喜" },
+];
 const feedbackActionText: Record<FeedbackAction, string> = { accept: "就它", complete: "已完成", reroll: "换一张", not_suitable: "当下不合适", later: "以后再说", dislike: "不喜欢" };
 const onboardingCategories = ["电影", "剧集", "书籍", "美食", "展览", "游戏", "手作", "散步"];
 const badWeatherTags = ["rain", "snow", "thunderstorm", "fog", "hot", "cold"];
@@ -243,7 +254,15 @@ function SourceBadge({ source }: { source: Source }) {
 }
 
 function EmptyState({ title, body, action, onAction }: { title: string; body: string; action?: string; onAction?: () => void }) {
-  return <div className="empty-state"><div className="empty-shell">◇</div><h3>{title}</h3><p>{body}</p>{action && <button className="secondary-button" onClick={onAction}>{action}</button>}</div>;
+  return <div className="empty-state"><img className="empty-shell-art" src="/art/yike/shell-pearl.webp" alt="" /><h3>{title}</h3><p>{body}</p>{action && <button className="secondary-button" onClick={onAction}>{action}</button>}</div>;
+}
+
+function shellForCategory(category: string) {
+  return shellCategories.find((item) => item.category === category) ?? shellCategories[shellCategories.length - 1];
+}
+
+function BrandLockup({ compact = false }: { compact?: boolean }) {
+  return <div className={`brand-lockup art-brand ${compact ? "compact" : ""}`}><img src="/art/yike/logo-yike.webp" alt="Yike 宜刻" /></div>;
 }
 
 export default function Home() {
@@ -273,7 +292,14 @@ export default function Home() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [cloudReady, setCloudReady] = useState(!realAgentEnabled);
   const [onboardingSaving, setOnboardingSaving] = useState(false);
-  const [ambient, setAmbient] = useState<AmbientContext>(() => makeAmbientContext());
+  const [ambient, setAmbient] = useState<AmbientContext>({
+    localTime: "--:--",
+    hour: 0,
+    timezone: "Asia/Shanghai",
+    weather: null,
+    loading: false,
+    notice: "正在读取本地时间",
+  });
   const [careNotice, setCareNotice] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const gatewayRef = useRef(createAgentGateway());
@@ -287,6 +313,11 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (cards && !(realAgentEnabled && readLocalValue("yike-user-id"))) setPersonalCards(JSON.parse(cards));
     if (savedContext) setContext({ ...DEFAULT_CONTEXT, ...JSON.parse(savedContext), constraints: [] });
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAmbient(makeAmbientContext()), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -420,20 +451,26 @@ export default function Home() {
 
   const contextSummary = `${context.time} 分钟 · ${context.outing === "stay_in" ? "不出门" : "可出门"} · ${levelText[context.energy]}精力`;
 
+  const loadActivityHistory = useCallback(async ({ from, to }: { from: string; to: string }) => {
+    return gatewayRef.current.getActivityHistory({ from, to });
+  }, []);
+
   const performDraw = async (isExchange = false) => {
     if (drawing) return;
+    const animationStartedAt = Date.now();
+    const minimumDuration = isExchange ? 460 : 2000;
     setDrawing(true);
     setNoCandidate(false);
     setCareNotice("");
     const request = { context: toDrawContext(context, ambient), recent_card_ids: recentIds };
     setDebugLog(JSON.stringify({ method: "drawCard", request, status: "pending" }, null, 2));
-    await sleep(isExchange ? 460 : 760);
     if ("replacePersonalCards" in gatewayRef.current && typeof gatewayRef.current.replacePersonalCards === "function") {
       gatewayRef.current.replacePersonalCards(personalCards.map(toContractCard));
     }
     try {
       const response = await gatewayRef.current.drawCard(request);
       setDebugLog(JSON.stringify({ method: "drawCard", request, response }, null, 2));
+      await sleep(Math.max(0, minimumDuration - (Date.now() - animationStartedAt)));
       if (response.type === "no_candidate") {
         setNoCandidate(true);
         setDrawing(false);
@@ -674,13 +711,13 @@ export default function Home() {
   return (
     <main className="app-shell">
       <aside className="desktop-sidebar">
-        <div className="brand-lockup"><div className="brand-mark">宜</div><div><strong>宜刻</strong><span>YIKE</span></div></div>
+        <BrandLockup />
         {appReady && <nav aria-label="主导航">{navItems.map((item) => <button key={item.id} className={view === item.id ? "current" : ""} onClick={() => go(item.id)}><span>{item.icon}</span>{item.label}</button>)}</nav>}
-        <div className="sidebar-companion"><img src="/otter-front.png" alt="海獭伙伴小宜" /><p>今天辛苦啦，今晚只拾一件刚刚好的事。</p></div>
+        <div className="sidebar-companion"><p>今天辛苦啦，今晚只拾一件刚刚好的事。</p></div>
       </aside>
 
       <section className="main-stage">
-        <header className="mobile-header"><div className="brand-lockup"><div className="brand-mark">宜</div><strong>宜刻</strong></div><button className="avatar-button" onClick={() => go("memory")}>小宜</button></header>
+        <header className="mobile-header"><BrandLockup compact /><button className="avatar-button" onClick={() => go("memory")}>小宜</button></header>
         {authRequired && !isSignedIn && <AuthLanding onToast={showToast} onDebug={setDebugLog} />}
         {authRequired && isSignedIn && !cloudReady && <LoadingView title="正在恢复你的卡池和记忆" body="正在读取 Supabase 里的个人卡池、记忆和偏好权重。" />}
         {needsOnboarding && <OnboardingView saving={onboardingSaving} onSave={saveOnboarding} />}
@@ -724,7 +761,7 @@ export default function Home() {
 
         {appReady && view === "pool" && <PoolView cards={personalCards} onAdd={() => go("add")} onArchive={archiveCard} onDelete={deleteCard} />}
 
-        {appReady && view === "memory" && <MemoryView memoryNote={memoryNote} memorySummary={memorySummary} feedbackInsight={feedbackInsight} debugLog={debugLog} onMemoryAction={updateMemoryItem} onReset={() => { setPersonalCards([]); setContext(DEFAULT_CONTEXT); setRecentIds([]); setFeedbackInsight(null); setMemoryNote("还没有新的反馈"); setMemorySummary(null); showToast("演示数据已重置"); }} />}
+        {appReady && view === "memory" && <MemoryView memoryNote={memoryNote} memorySummary={memorySummary} feedbackInsight={feedbackInsight} debugLog={debugLog} onLoadHistory={loadActivityHistory} onMemoryAction={updateMemoryItem} onReset={() => { setPersonalCards([]); setContext(DEFAULT_CONTEXT); setRecentIds([]); setFeedbackInsight(null); setMemoryNote("还没有新的反馈"); setMemorySummary(null); showToast("演示数据已重置"); }} />}
 
         {appReady && view === "result" && result && <ResultView
           card={result}
@@ -744,7 +781,7 @@ export default function Home() {
         />}
       </section>
 
-      {appReady && <ContextPanel context={context} contextSummary={contextSummary} ambient={ambient} onRefreshAmbient={refreshAmbientContext} setContext={setContext} />}
+      {appReady && <PageRail view={view} cardCount={personalCards.length} context={context} contextSummary={contextSummary} ambient={ambient} onRefreshAmbient={refreshAmbientContext} setContext={setContext} />}
 
       {appReady && <nav className="mobile-nav" aria-label="移动端主导航">{navItems.map((item) => <button key={item.id} className={view === item.id ? "current" : ""} onClick={() => go(item.id)}><span>{item.icon}</span><small>{item.label}</small></button>)}</nav>}
 
@@ -893,11 +930,23 @@ function HomeView({ context, contextSummary, ambient, drawing, noCandidate, pers
   context: Context; contextSummary: string; ambient: AmbientContext; drawing: boolean; noCandidate: boolean; personalCount: number;
   setContext: React.Dispatch<React.SetStateAction<Context>>; onOpenContext: () => void; onDraw: () => void; onAdd: () => void;
 }) {
+  const journalCopy = ambient.hour < 5
+    ? { greeting: "夜深了，今天的你", lines: ["今晚，", "拾一件", "轻一点的事"] }
+    : ambient.hour < 12
+      ? { greeting: "早上好，今天的你", lines: ["今天，", "拾一件", "刚刚好的事"] }
+      : ambient.hour < 18
+        ? { greeting: "下午好，此刻的你", lines: ["傍晚前，", "拾一件", "刚刚好的事"] }
+        : { greeting: "晚上好，今天的你", lines: ["今晚，", "拾一件", "刚刚好的事"] };
+
   return <div className="view home-view">
     <div className="eyebrow">GOOD EVENING · 此刻</div>
-    <section className="hero-card">
-      <div className="hero-copy"><p className="kicker">晚上好，今天的你</p><h1>今晚，拾一件<br />刚刚好的事</h1><p>不用翻完所有收藏。告诉小宜此刻的状态，只给你一个能马上开始的选择。</p></div>
-      <div className="seaside-scene"><div className="sun-disc" /><div className="mountain one" /><div className="mountain two" /><div className="wave-lines">～～～～～～</div><img src="/otter-front.png" alt="拿着贝壳的海獭小宜" /></div>
+    <section className="hero-card journal-hero journal-reference-hero">
+      <img className="journal-reference-art" src="/art/yike/home-journal-dynamic.webp" alt="" aria-hidden="true" />
+      <div className="journal-dynamic-copy">
+        <p className="kicker">{journalCopy.greeting}</p>
+        <h1>{journalCopy.lines.map((line) => <span key={line}>{line}</span>)}</h1>
+        <p>不用翻完所有收藏。<br />告诉小宜你现在有 {context.time} 分钟、{levelText[context.energy]}精力，<br />只给你一个能马上开始的选择。</p>
+      </div>
     </section>
 
     <div className="ambient-strip"><div><span>此刻</span><strong>{ambient.localTime}</strong></div><i /><div><span>天气</span><strong>{ambient.loading ? "读取中" : weatherText(ambient.weather)}</strong></div><p>{ambient.notice}</p></div>
@@ -905,8 +954,10 @@ function HomeView({ context, contextSummary, ambient, drawing, noCandidate, pers
 
     <section className="pick-section"><div className="section-heading"><div><span className="section-index">01</span><h2>今晚卡包</h2></div><p>满足硬约束后，保留一点刚刚好的惊喜。</p></div>
       <div className="source-selector"><span>从哪里抽</span><div>{(["personal", "preset", "both"] as SourceScope[]).map((source) => <Chip key={source} active={context.source === source} onClick={() => setContext((value) => ({ ...value, source }))}>{sourceText[source]}</Chip>)}</div></div>
-      <button className={`card-pack ${drawing ? "thinking" : ""}`} onClick={onDraw} aria-label="抽一张娱乐卡">
-        <span className="pack-stitch" /><span className="pack-label">TONIGHT&apos;S PICK</span><strong>{drawing ? "正在为你挑选…" : "轻轻拆开"}</strong><small>{contextSummary}</small><span className="shell-seal">◇</span>
+      <button className={`card-pack draw-ritual ${drawing ? "thinking" : ""}`} onClick={onDraw} disabled={drawing} aria-label={drawing ? "正在抽取一张娱乐卡" : "抽一张娱乐卡"}>
+        <span className="pack-stitch" />
+        <span className="draw-copy"><span className="pack-label">TONIGHT&apos;S PICK</span><strong>{drawing ? "小宜正在打开贝壳…" : "轻轻拆开"}</strong><small>{contextSummary}</small></span>
+        <span className="draw-stage" aria-hidden="true"><img className="draw-otter hold" src="/art/yike/otter-hold-shell.webp" alt="" /><img className="draw-otter lift" src="/art/yike/otter-lift-shell.webp" alt="" /><img className="draw-pearl" src="/art/yike/pearl-card.webp" alt="" /><i className="pearl-ring one" /><i className="pearl-ring two" /></span>
       </button>
       <button className="primary-button draw-button" onClick={onDraw} disabled={drawing}>{drawing ? "正在匹配此刻…" : "抽一张"}</button>
     </section>
@@ -931,15 +982,31 @@ function ContextPanel({ context, contextSummary, ambient, onRefreshAmbient, setC
   return <aside className="desktop-context"><div className="context-title"><span>此刻上下文</span><b>LIVE</b></div><h2>{contextSummary}</h2><div className="ambient-panel"><div><span>当前时间</span><strong>{ambient.localTime}</strong></div><div><span>当地天气</span><strong>{ambient.loading ? "读取中" : weatherText(ambient.weather)}</strong></div><p>{ambient.notice}</p><button type="button" onClick={onRefreshAmbient}>刷新</button></div><p>调整会立刻影响候选集合，敏感状态不会进入长期记忆。</p><ContextControls context={context} setContext={setContext} /><div className="privacy-note"><span>✓</span><div><strong>隐私边界</strong><p>当次状态仅保留在当前浏览器会话。</p></div></div></aside>;
 }
 
+function PageRail({ view, cardCount, context, contextSummary, ambient, onRefreshAmbient, setContext }: {
+  view: View; cardCount: number; context: Context; contextSummary: string; ambient: AmbientContext;
+  onRefreshAmbient: () => void; setContext: React.Dispatch<React.SetStateAction<Context>>;
+}) {
+  if (view === "home" || view === "result") {
+    return <ContextPanel context={context} contextSummary={contextSummary} ambient={ambient} onRefreshAmbient={onRefreshAmbient} setContext={setContext} />;
+  }
+  if (view === "pool") {
+    return <aside className="desktop-context page-rail pool-rail"><div className="context-title"><span>海湾小记</span><b>ATLAS</b></div><img className="rail-shell" src="/art/yike/shell-nautilus.webp" alt="蓝色鹦鹉螺" /><h2>{cardCount} 张卡，九种贝壳</h2><p>每一种贝壳代表一类故事。选中贝壳，就能打捞对应的收藏。</p><div className="rail-note"><strong>图鉴规则</strong><span>有收藏的类别会留下数量；空图鉴也会保留位置，等你慢慢拾满。</span></div></aside>;
+  }
+  if (view === "add") {
+    return <aside className="desktop-context page-rail capture-rail"><div className="context-title"><span>小宜会帮你整理</span><b>3 STEPS</b></div><ol className="capture-steps"><li><b>1</b><div><strong>读取内容</strong><span>识别图片或文字信息</span></div></li><li><b>2</b><div><strong>补全执行条件</strong><span>提取时长、精力和地点</span></div></li><li><b>3</b><div><strong>由你确认后保存</strong><span>确认无误，收进卡池</span></div></li></ol><img className="rail-otter" src="/art/yike/otter-companion.webp" alt="拿着贝壳的小宜" /><div className="rail-note privacy"><strong>图片仅用于本次整理</strong><span>原图默认私有，不会公开展示。</span></div></aside>;
+  }
+  return <aside className="desktop-context page-rail memory-rail"><div className="context-title"><span>不会被记住的事</span><b>PRIVATE</b></div><img className="rail-shell" src="/art/yike/shell-pearl.webp" alt="珍珠贝" /><h2>敏感状态只在此刻使用</h2><ul><li>经期不适</li><li>不久站</li><li>不需妆容</li></ul><p>这些条件不会写入长期记忆，也不会被推断为健康或人格标签。</p><div className="rail-note privacy"><strong>你的数据只属于你</strong><span>可查看、可管理、可撤回。</span></div></aside>;
+}
+
 function AddView({ inputText, imageName, imagePreview, parseStep, draft, fileInputRef, setInputText, setDraft, onImage, onParse, onSave }: {
   inputText: string; imageName: string; imagePreview: string; parseStep: string; draft: Card | null;
   fileInputRef: React.RefObject<HTMLInputElement | null>; setInputText: (value: string) => void; setDraft: React.Dispatch<React.SetStateAction<Card | null>>;
   onImage: (event: ChangeEvent<HTMLInputElement>) => void; onParse: () => void; onSave: () => void;
 }) {
   return <div className="view add-view"><div className="eyebrow">CAPTURE · 收进小岛</div><div className="page-title"><div><h1>把种草，变成一张能抽的卡</h1><p>截图或文字都可以。Agent 先整理，你只确认真正影响执行的字段。</p></div><span className="step-badge">约 10 秒</span></div>
-    {parseStep === "input" && <div className="add-grid"><button className="upload-zone" onClick={() => fileInputRef.current?.click()}>{imagePreview ? <img src={imagePreview} alt="待识别截图预览" /> : <><span className="upload-icon">＋</span><strong>上传截图或图片</strong><small>支持 PNG、JPG，原图默认私有</small></>}<input ref={fileInputRef} type="file" accept="image/*" hidden onChange={onImage} /></button><div className="text-entry"><label htmlFor="capture-text">粘贴文字或手动输入</label><textarea id="capture-text" value={inputText} onChange={(event) => setInputText(event.target.value)} placeholder="例如：周末想去看海边主题展，听说现场很安静……" /><div className="entry-meta"><span>{imageName || "也可以只输入标题"}</span><span>{inputText.length}/300</span></div></div><button className="primary-button wide" onClick={onParse}>开始整理</button></div>}
-    {(parseStep === "reading" || parseStep === "organizing") && <div className="agent-progress"><div className="progress-visual"><div className="scan-line" /><span>◇</span><img src="/otter-front.png" alt="正在工作的海獭小宜" /></div><h2>{parseStep === "reading" ? "正在看懂这份收藏…" : "正在整理执行信息…"}</h2><div className="progress-steps"><span className="done">看内容</span><i /><span className={parseStep === "organizing" ? "done" : ""}>整理字段</span><i /><span>生成草稿</span></div></div>}
-    {parseStep === "draft" && draft && <div className="draft-layout"><div className="agent-summary"><div className="summary-icon">◇</div><div><span>AGENT 已整理</span><h2>一张可执行的娱乐卡</h2><p>蓝色提示表示模型置信度较低，你可以随时改。</p></div><img src="/otter-side.png" alt="海獭小宜" /></div><div className="draft-form"><Field label="标题" hint="已识别"><input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></Field><Field label="娱乐类别" hint="请确认" uncertain><select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })}><option>电影</option><option>剧集</option><option>书籍</option><option>美食</option><option>展览</option><option>游戏</option><option>手作</option><option>散步</option><option>其他</option></select></Field><Field label="预计时长" hint="请确认" uncertain><input type="number" value={draft.duration} onChange={(event) => setDraft({ ...draft, duration: Number(event.target.value) })} /><em>分钟</em></Field><Field label="精力"><select value={draft.energy} onChange={(event) => setDraft({ ...draft, energy: event.target.value as Level })}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></Field><Field label="室内外"><select value={draft.outing} onChange={(event) => setDraft({ ...draft, outing: event.target.value as Card["outing"] })}><option value="indoor">室内</option><option value="outdoor">室外</option><option value="either">均可</option></select></Field><Field label="准备成本"><select value={draft.prep} onChange={(event) => setDraft({ ...draft, prep: event.target.value as Level })}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></Field></div><button className="primary-button wide" onClick={onSave}>保存到我的卡池</button></div>}
+    {parseStep === "input" && <div className="add-grid capture-book"><span className="book-rings" aria-hidden="true" /><button className="upload-zone" onClick={() => fileInputRef.current?.click()}>{imagePreview ? <img src={imagePreview} alt="待识别截图预览" /> : <><span className="upload-icon">＋</span><strong>上传截图或图片</strong><small>支持 PNG、JPG，原图默认私有</small></>}<input ref={fileInputRef} type="file" accept="image/*" hidden onChange={onImage} /></button><div className="text-entry"><label htmlFor="capture-text">粘贴文字或手动输入</label><textarea id="capture-text" value={inputText} onChange={(event) => setInputText(event.target.value)} placeholder="例如：周末想去看海边主题展，听说现场很安静……" /><div className="entry-meta"><span>{imageName || "也可以只输入标题"}</span><span>{inputText.length}/300</span></div></div><button className="primary-button wide" onClick={onParse}>开始整理</button></div>}
+    {(parseStep === "reading" || parseStep === "organizing") && <div className="agent-progress"><div className="progress-visual"><div className="scan-line" /><img src="/art/yike/shell-pearl.webp" alt="" /><img src="/art/yike/otter-companion.webp" alt="正在工作的海獭小宜" /></div><h2>{parseStep === "reading" ? "正在看懂这份收藏…" : "正在整理执行信息…"}</h2><div className="progress-steps"><span className="done">看内容</span><i /><span className={parseStep === "organizing" ? "done" : ""}>整理字段</span><i /><span>生成草稿</span></div></div>}
+    {parseStep === "draft" && draft && <div className="draft-layout"><div className="agent-summary"><img className="summary-shell" src="/art/yike/shell-pearl.webp" alt="" /><div><span>AGENT 已整理</span><h2>一张可执行的娱乐卡</h2><p>蓝色提示表示模型置信度较低，你可以随时改。</p></div><img src="/art/yike/otter-companion.webp" alt="海獭小宜" /></div><div className="draft-form"><Field label="标题" hint="已识别"><input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></Field><Field label="娱乐类别" hint="请确认" uncertain><select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })}><option>电影</option><option>剧集</option><option>书籍</option><option>美食</option><option>展览</option><option>游戏</option><option>手作</option><option>散步</option><option>其他</option></select></Field><Field label="预计时长" hint="请确认" uncertain><input type="number" value={draft.duration} onChange={(event) => setDraft({ ...draft, duration: Number(event.target.value) })} /><em>分钟</em></Field><Field label="精力"><select value={draft.energy} onChange={(event) => setDraft({ ...draft, energy: event.target.value as Level })}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></Field><Field label="室内外"><select value={draft.outing} onChange={(event) => setDraft({ ...draft, outing: event.target.value as Card["outing"] })}><option value="indoor">室内</option><option value="outdoor">室外</option><option value="either">均可</option></select></Field><Field label="准备成本"><select value={draft.prep} onChange={(event) => setDraft({ ...draft, prep: event.target.value as Level })}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></Field></div><button className="primary-button wide" onClick={onSave}>保存到我的卡池</button></div>}
   </div>;
 }
 
@@ -949,8 +1016,24 @@ function Field({ label, hint, uncertain, children }: { label: string; hint?: str
 
 function PoolView({ cards, onAdd, onArchive, onDelete }: { cards: Card[]; onAdd: () => void; onArchive: (id: string) => void; onDelete: (id: string) => void }) {
   const [query, setQuery] = useState("");
-  const visible = cards.filter((card) => card.title.includes(query) || card.category.includes(query));
-  return <div className="view pool-view"><div className="eyebrow">COLLECTION · 我的海湾</div><div className="page-title"><div><h1>收进来的好故事</h1><p>不是待办清单，只是一片随时可以回来打捞的海湾。</p></div><button className="primary-button compact" onClick={onAdd}>＋ 添加收藏</button></div><div className="pool-toolbar"><div className="search-box">⌕<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题或类别" /></div><div className="pool-count"><strong>{cards.length}</strong><span>张我的卡</span></div></div>{cards.length === 0 ? <EmptyState title="海湾里还没有卡片" body="先收进一张真正感兴趣的娱乐收藏吧。" action="添加一张" onAction={onAdd} /> : <div className="card-grid">{visible.map((card) => <article className="pool-card" key={card.id}><div className={`pool-card-art ${card.imageUrl ? "has-image" : ""}`}>{card.imageUrl ? <img src={card.imageUrl} alt={card.title} /> : <><span>◇</span><small>{card.category}</small></>}</div><div className="pool-card-body"><div><SourceBadge source={card.source} /><span className={`status-pill ${card.status}`}>{card.status === "active" ? "可抽取" : card.status}</span></div><h3>{card.title}</h3><p>{card.duration} 分钟 · {card.outing === "indoor" ? "室内" : "室外"} · {levelText[card.prep]}准备</p><div className="pool-actions"><button>编辑</button>{card.status === "archived" ? <button className="danger" onClick={() => onDelete(card.id)}>删除</button> : <button onClick={() => onArchive(card.id)}>归档</button>}</div></div></article>)}</div>}</div>;
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [status, setStatus] = useState<"all" | Card["status"]>("all");
+  const normalizedQuery = query.trim().toLowerCase();
+  const counts = Object.fromEntries(shellCategories.map((item) => [item.category, cards.filter((card) => card.category === item.category).length]));
+  const visible = cards.filter((card) => {
+    const matchesQuery = !normalizedQuery || card.title.toLowerCase().includes(normalizedQuery) || card.category.toLowerCase().includes(normalizedQuery);
+    return matchesQuery && (!selectedCategory || card.category === selectedCategory) && (status === "all" || card.status === status);
+  });
+  const statusOptions: Array<{ value: "all" | Card["status"]; label: string }> = [
+    { value: "all", label: "全部" }, { value: "active", label: "可抽取" }, { value: "cooling", label: "稍后" }, { value: "completed", label: "已完成" }, { value: "archived", label: "已归档" },
+  ];
+
+  return <div className="view pool-view"><div className="eyebrow">COLLECTION · 我的海湾</div><div className="page-title"><div><h1>收进来的好故事</h1><p>不是待办清单，只是一片随时可以回来打捞的海湾。</p></div><button className="primary-button compact" onClick={onAdd}>＋ 添加收藏</button></div>
+    <section className="shell-atlas" aria-labelledby="shell-atlas-title"><div className="atlas-heading"><div><span>贝壳图鉴</span><h2 id="shell-atlas-title">从一种贝壳开始打捞</h2></div><button type="button" className={selectedCategory ? "" : "active"} onClick={() => setSelectedCategory(null)}>查看全部</button></div><div className="shell-atlas-grid">{shellCategories.map((item) => { const count = counts[item.category] ?? 0; const selected = selectedCategory === item.category; return <button type="button" key={item.category} className={`${selected ? "selected" : ""} ${count === 0 ? "empty" : ""}`} aria-pressed={selected} onClick={() => setSelectedCategory(selected ? null : item.category)}><img src={item.image} alt={`${item.category}类别贝壳`} /><strong>{item.category}</strong><span>{count ? `${count} 张卡` : "等待收藏"}</span></button>; })}</div></section>
+    <div className="pool-toolbar"><div className="search-box">⌕<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题或类别" /></div><div className="pool-count"><strong>{cards.length}</strong><span>张我的卡</span></div></div>
+    <div className="status-filters" aria-label="按状态筛选">{statusOptions.map((option) => <button type="button" key={option.value} className={status === option.value ? "active" : ""} aria-pressed={status === option.value} onClick={() => setStatus(option.value)}>{option.label}</button>)}</div>
+    {cards.length === 0 ? <EmptyState title="海湾里还没有卡片" body="先收进一张真正感兴趣的娱乐收藏吧。" action="添加一张" onAction={onAdd} /> : visible.length === 0 ? <EmptyState title="这一格暂时没有卡片" body="换一枚贝壳或清空搜索条件，再打捞一次。" action="查看全部" onAction={() => { setSelectedCategory(null); setStatus("all"); setQuery(""); }} /> : <div className="card-grid atlas-card-grid">{visible.map((card) => { const shell = shellForCategory(card.category); return <article className="pool-card" key={card.id}><div className={`pool-card-art ${card.imageUrl ? "has-image" : ""}`}>{card.imageUrl ? <img src={card.imageUrl} alt={card.title} /> : <><img className="category-shell-art" src={shell.image} alt="" /><small>{card.category}</small></>}</div><div className="pool-card-body"><div><SourceBadge source={card.source} /><span className={`status-pill ${card.status}`}>{card.status === "active" ? "可抽取" : card.status === "cooling" ? "稍后" : card.status === "completed" ? "已完成" : "已归档"}</span></div><h3>{card.title}</h3><p>{card.duration} 分钟 · {card.outing === "indoor" ? "室内" : card.outing === "outdoor" ? "室外" : "均可"} · {levelText[card.prep]}准备</p><div className="pool-actions"><button>编辑</button>{card.status === "archived" ? <button className="danger" onClick={() => onDelete(card.id)}>删除</button> : <button onClick={() => onArchive(card.id)}>归档</button>}</div></div></article>; })}</div>}
+  </div>;
 }
 
 function ResultView({ card, reasons, drawing, feedbackOpen, feedbackSubmitting, feedbackInsight, careNotice, ambient, setFeedbackOpen, onAccept, onExchange, onContext, onFeedback, onCopy }: {
@@ -968,12 +1051,80 @@ function Feedback({ title, impact, body, disabled, onClick }: { title: string; i
   return <button className="feedback-card" type="button" disabled={disabled} onClick={onClick}><span>◇</span><div><strong>{title}<em>{impact}</em></strong><small>{body}</small></div></button>;
 }
 
-function MemoryView({ memoryNote, memorySummary, feedbackInsight, debugLog, onMemoryAction, onReset }: { memoryNote: string; memorySummary: MemorySummary | null; feedbackInsight: FeedbackInsight | null; debugLog: string; onMemoryAction: (itemKey: string, action: MemoryItemAction) => void; onReset: () => void }) {
-  const calendar = memorySummary?.feedback_calendar;
+function localDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function calendarRange(month: Date) {
+  const first = new Date(month.getFullYear(), month.getMonth(), 1);
+  const mondayOffset = (first.getDay() + 6) % 7;
+  const start = new Date(first);
+  start.setDate(first.getDate() - mondayOffset);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 42);
+  return { start, end };
+}
+
+function MemoryView({ memoryNote, memorySummary, feedbackInsight, debugLog, onLoadHistory, onMemoryAction, onReset }: {
+  memoryNote: string; memorySummary: MemorySummary | null; feedbackInsight: FeedbackInsight | null; debugLog: string;
+  onLoadHistory: (range: { from: string; to: string }) => Promise<{ events: ActivityHistoryEvent[] }>;
+  onMemoryAction: (itemKey: string, action: MemoryItemAction) => void;
+  onReset: () => void;
+}) {
+  const now = new Date();
+  const [month, setMonth] = useState(() => new Date(now.getFullYear(), now.getMonth(), 1));
+  const [selectedDate, setSelectedDate] = useState(() => localDateKey(now));
+  const [events, setEvents] = useState<ActivityHistoryEvent[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState("");
+  const [retryKey, setRetryKey] = useState(0);
+  const range = calendarRange(month);
+  const from = range.start.toISOString();
+  const to = range.end.toISOString();
+
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) {
+        setHistoryLoading(true);
+        setHistoryError("");
+      }
+      return onLoadHistory({ from, to });
+    }).then((response) => {
+      if (!cancelled) setEvents(response.events);
+    }).catch((error) => {
+      if (!cancelled) setHistoryError(error instanceof Error ? error.message : "历史记录读取失败");
+    }).finally(() => {
+      if (!cancelled) setHistoryLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [from, onLoadHistory, retryKey, to]);
+
+  const days = Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(range.start);
+    date.setDate(range.start.getDate() + index);
+    return date;
+  });
+  const eventsByDate = events.reduce<Record<string, ActivityHistoryEvent[]>>((result, event) => {
+    const key = localDateKey(new Date(event.occurred_at));
+    result[key] = [...(result[key] ?? []), event];
+    return result;
+  }, {});
+  const selectedEvents = eventsByDate[selectedDate] ?? [];
+  const summaryCalendar = memorySummary?.feedback_calendar;
   const preference = memorySummary?.long_term_preference;
   const memoryItems = memorySummary?.memory_items ?? [];
-  const pearlText = calendar ? `本月拾到 ${calendar.pearl_count} 颗小珍珠` : memoryNote;
-  const activeDaysText = calendar && calendar.active_days.length > 0 ? `有反馈的日期：${calendar.active_days.join("、")} 日` : "还没有形成可展示的反馈日历";
+  const moveMonth = (offset: number) => {
+    const next = new Date(month.getFullYear(), month.getMonth() + offset, 1);
+    setMonth(next);
+    setSelectedDate(localDateKey(next));
+  };
 
-  return <div className="view memory-view"><div className="eyebrow">MEMORY · 可见且克制</div><div className="page-title"><div><h1>小宜记得什么</h1><p>偏好可以查看、保留、清除；敏感状态不会长期保存。</p></div></div><div className="memory-grid"><section className="memory-card blue"><span>本次反馈 · 贝壳日历数据</span><h2>{pearlText}</h2><p>{calendar ? `${calendar.month_label} · ${activeDaysText}。完成 ${calendar.completed_count} 次，正向反馈 ${calendar.positive_count} 次。` : "前端贝壳日历 UI 接入后，将直接使用这里的月份、日期和珍珠数量。"}</p></section><section className="memory-card"><span>长期偏好</span><h2>{preference?.headline ?? (feedbackInsight ? feedbackInsight.memoryShift : "室内 · 低准备 · 45 分钟")}</h2><div className="memory-tags">{(preference?.tags ?? [{ label: "活动场景", value: "室内" }, { label: "准备程度", value: "低" }, { label: "可用时长", value: "45 分钟" }]).map((tag) => <em key={`${tag.label}-${tag.value}`}>{tag.label}：{tag.value}</em>)}</div><p>{preference?.evidence ?? (feedbackInsight ? feedbackInsight.longTerm : "这里只展示用户主动选择和可解释的行为信号。")}</p></section></div><div className="memory-layout"><section className="memory-list"><div><h2>记忆清单</h2><span>以下为可解释、可管理的行为信号。</span></div>{memoryItems.length === 0 ? <p className="memory-empty">暂无可展示记忆，完成几次抽卡反馈后会自动替换这里的三条内容。</p> : memoryItems.map((item) => <article key={item.item_key} className="memory-row"><div><strong>{item.title}</strong><p>{item.description}</p><small>{item.source}{item.action_state === "kept" ? " · 已保留" : ""}</small></div><div><button onClick={() => onMemoryAction(item.item_key, "keep")}>保留</button><button onClick={() => onMemoryAction(item.item_key, "view")}>查看</button><button className="danger" onClick={() => onMemoryAction(item.item_key, "clear")}>清除</button></div></article>)}</section><aside className="memory-static"><h2>不会被记住的事</h2>{(memorySummary?.non_persistent ?? [{ label: "经期不适", reason: "只在当次会话中使用" }, { label: "不久站", reason: "只影响本次硬过滤" }, { label: "不需妆容", reason: "只用于当次准备成本判断" }]).map((item) => <p key={item.label}><strong>{item.label}</strong><span>{item.reason}</span></p>)}</aside></div>{feedbackInsight && <FeedbackInsightPanel insight={feedbackInsight} />}<section className="debug-panel"><div><span>FRONTEND ↔ AGENT</span><b>v1.0</b></div><h2>最后一次调用</h2><pre>{debugLog}</pre></section><button className="secondary-button" onClick={onReset}>重置演示数据</button></div>;
+  return <div className="view memory-view"><div className="eyebrow">MEMORY · 可见且克制</div><div className="page-title"><div><h1>小宜记得什么</h1><p>偏好可以查看、修改、清除；敏感状态不会长期保存。</p></div></div>
+    <section className="memory-calendar"><img className="calendar-shell-frame" src="/art/yike/calendar-shell-frame.webp" alt="" /><div className="calendar-content"><div className="calendar-head"><button type="button" onClick={() => moveMonth(-1)} aria-label="上个月">←</button><div><span>拾贝日历</span><h2>{month.getFullYear()} 年 {month.getMonth() + 1} 月</h2></div><button type="button" onClick={() => moveMonth(1)} aria-label="下个月">→</button></div><div className="calendar-weekdays" aria-hidden="true">{["一", "二", "三", "四", "五", "六", "日"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid">{days.map((date) => { const key = localDateKey(date); const dayEvents = eventsByDate[key] ?? []; const outside = date.getMonth() !== month.getMonth(); return <button type="button" key={key} className={`${outside ? "outside" : ""} ${selectedDate === key ? "selected" : ""}`} onClick={() => setSelectedDate(key)} aria-label={`${date.getMonth() + 1}月${date.getDate()}日，${dayEvents.length}条记录`}><span>{date.getDate()}</span><i>{dayEvents.slice(0, 3).map((event) => <b key={event.event_id} className={event.kind} />)}</i></button>; })}</div></div></section>
+    <section className="day-memory"><div className="day-memory-title"><div><span>{selectedDate}</span><h2>这一天拾到的贝壳</h2></div>{events.some((event) => event.is_demo) && <b>演示记录</b>}</div>{historyLoading ? <p className="calendar-message">正在从海湾里读取记录…</p> : historyError ? <div className="calendar-message error"><p>暂时无法读取：{historyError}</p><button type="button" onClick={() => setRetryKey((value) => value + 1)}>重试</button></div> : selectedEvents.length === 0 ? <p className="calendar-message">这天海面很安静，没有留下新的记录。</p> : <div className="day-event-list">{selectedEvents.map((event) => { const category = categoryFromContract[event.content_category]; const shell = shellForCategory(category); return <article key={event.event_id}><img src={shell.image} alt="" /><div><span>{event.kind === "draw" ? "抽到一张" : feedbackActionText[event.action ?? "accept"]}</span><strong>{event.title}</strong><small>{new Date(event.occurred_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })} · {category}</small></div></article>; })}</div>}</section>
+    <div className="memory-grid"><section className="memory-card blue"><span>本次反馈 · 贝壳日历</span><h2>{summaryCalendar ? `本月拾到 ${summaryCalendar.pearl_count} 颗小珍珠` : memoryNote}</h2><p>{summaryCalendar ? `${summaryCalendar.month_label} · 完成 ${summaryCalendar.completed_count} 次，正向反馈 ${summaryCalendar.positive_count} 次。` : feedbackInsight ? `${feedbackInsight.shortTerm}；${feedbackInsight.cooldown}。` : "你可以随时撤回，系统不会据此建立人格或健康标签。"}</p></section><section className="memory-card"><span>长期偏好</span><h2>{preference?.headline ?? (feedbackInsight ? feedbackInsight.memoryShift : "室内 · 低准备 · 45 分钟")}</h2><div className="memory-tags">{(preference?.tags ?? [{ label: "活动场景", value: "室内" }, { label: "准备程度", value: "低" }, { label: "可用时长", value: "45 分钟" }]).map((tag) => <em key={`${tag.label}-${tag.value}`}>{tag.label}：{tag.value}</em>)}</div><p>{preference?.evidence ?? (feedbackInsight ? feedbackInsight.longTerm : "这里只展示用户主动选择和可解释的行为信号。")}</p></section></div>
+    <div className="memory-layout"><section className="memory-list"><div><h2>记忆清单</h2><span>以下为可解释、可管理的行为信号。</span></div>{memoryItems.length === 0 ? <p className="memory-empty">暂无可展示记忆，完成几次抽卡反馈后会出现在这里。</p> : memoryItems.map((item) => <article key={item.item_key} className="memory-row"><div><strong>{item.title}</strong><p>{item.description}</p><small>{item.source}{item.action_state === "kept" ? " · 已保留" : ""}</small></div><div><button onClick={() => onMemoryAction(item.item_key, "keep")}>保留</button><button onClick={() => onMemoryAction(item.item_key, "view")}>查看</button><button className="danger" onClick={() => onMemoryAction(item.item_key, "clear")}>清除</button></div></article>)}</section><aside className="memory-static"><h2>不会被记住的事</h2>{(memorySummary?.non_persistent ?? [{ label: "经期不适", reason: "只在当次会话中使用" }, { label: "不久站", reason: "只影响本次硬过滤" }, { label: "不需妆容", reason: "只用于当次准备成本判断" }]).map((item) => <p key={item.label}><strong>{item.label}</strong><span>{item.reason}</span></p>)}</aside></div>{feedbackInsight && <FeedbackInsightPanel insight={feedbackInsight} />}
+    <details className="debug-panel"><summary><span>FRONTEND ↔ AGENT</span><b>v1.0 · 最后一次调用</b></summary><pre>{debugLog}</pre></details><button className="secondary-button reset-demo" onClick={onReset}>重置演示数据</button>
+  </div>;
 }
