@@ -821,7 +821,7 @@ export default function Home() {
 }
 
 function AuthLanding({ onToast, onDebug }: { onToast: (message: string) => void; onDebug: (message: string) => void }) {
-  return <div className="view auth-landing"><div className="eyebrow">ACCOUNT · 开始使用</div><div className="auth-hero"><div><h1>先拥有一片自己的卡池</h1><p>登录后，截图识别、个人卡池、推荐反馈和长期记忆都会按你的账号保存。</p></div><img src="/otter-front.png" alt="欢迎进入宜刻的小宜" /></div><AuthPanel onToast={onToast} onDebug={onDebug} startExpanded /></div>;
+  return <div className="view auth-landing"><div className="eyebrow">ACCOUNT · 开始使用</div><div className="auth-hero"><div><img className="auth-handwritten" src="/art/yike/handwritten-auth.png" alt="先拥有一片自己的卡池" /><p>登录后，截图识别、个人卡池、推荐反馈和长期记忆都会按你的账号保存。</p></div><img src="/otter-front.png" alt="欢迎进入宜刻的小宜" /></div><AuthPanel onToast={onToast} onDebug={onDebug} startExpanded /></div>;
 }
 
 function LoadingView({ title, body }: { title: string; body: string }) {
