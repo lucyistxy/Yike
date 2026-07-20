@@ -1,4 +1,5 @@
 import type {
+  ActivityHistoryEvent,
   AgentGateway,
   Card,
   ContentCategory,
@@ -124,6 +125,16 @@ export class HttpAgentGateway implements AgentGateway {
       body: input,
     });
     return normalizeWeatherContext(response);
+  }
+
+  async getActivityHistory(input: { from: string; to: string }): Promise<{ events: ActivityHistoryEvent[] }> {
+    const auth = await this.getAuth();
+    const params = new URLSearchParams({ user_id: auth.userId, from: input.from, to: input.to });
+    const response = await this.request<Record<string, unknown>>(`activity-history?${params.toString()}`, { method: "GET" });
+    const events = Array.isArray(response.events)
+      ? response.events.map((event) => normalizeActivityHistoryEvent(event as Record<string, unknown>))
+      : [];
+    return { events };
   }
 
   async parseCard(input: ParseCardInput): Promise<ParseCardResult> {
@@ -524,6 +535,22 @@ function normalizeWeatherContext(raw: Record<string, unknown>): WeatherContext {
     rain_probability: raw.rain_probability == null ? null : Number(raw.rain_probability),
     weather_tags: normalizeStringArray(raw.weather_tags),
     observed_at: new Date().toISOString(),
+  };
+}
+
+function normalizeActivityHistoryEvent(raw: Record<string, unknown>): ActivityHistoryEvent {
+  const action = String(raw.action ?? "");
+  const normalizedAction = action === "accept" || action === "complete" || action === "not_suitable" || action === "later" || action === "dislike"
+    ? action as FeedbackAction
+    : undefined;
+  return {
+    event_id: String(raw.event_id ?? `${raw.kind ?? "event"}-${raw.occurred_at ?? Date.now()}`),
+    kind: raw.kind === "feedback" ? "feedback" : "draw",
+    ...(normalizedAction ? { action: normalizedAction } : {}),
+    card_id: String(raw.card_id ?? ""),
+    title: String(raw.title ?? "一张今晚的卡"),
+    content_category: normalizeCategory(raw.content_category),
+    occurred_at: String(raw.occurred_at ?? new Date().toISOString()),
   };
 }
 

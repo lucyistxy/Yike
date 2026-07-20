@@ -102,6 +102,82 @@ export async function loadMemory(supabase: SupabaseClient, userId: string): Prom
   };
 }
 
+export async function loadActivityHistory(
+  supabase: SupabaseClient,
+  userId: string,
+  from: string,
+  to: string
+) {
+  const [{ data: draws, error: drawError }, { data: feedback, error: feedbackError }] = await Promise.all([
+    supabase
+      .from("recommendation_logs")
+      .select("request_id, selected_card_id, created_at")
+      .eq("user_id", userId)
+      .not("selected_card_id", "is", null)
+      .gte("created_at", from)
+      .lt("created_at", to)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("feedback_events")
+      .select("event_id, card_id, action, created_at")
+      .eq("user_id", userId)
+      .gte("created_at", from)
+      .lt("created_at", to)
+      .order("created_at", { ascending: false })
+  ]);
+
+  if (drawError) throw new Error(`load_activity_draws_failed: ${drawError.message}`);
+  if (feedbackError) throw new Error(`load_activity_feedback_failed: ${feedbackError.message}`);
+
+  const cardIds = [...new Set([
+    ...(draws ?? []).map((item: Record<string, unknown>) => String(item.selected_card_id ?? "")),
+    ...(feedback ?? []).map((item: Record<string, unknown>) => String(item.card_id ?? ""))
+  ].filter(Boolean))];
+
+  let cards: Array<Record<string, unknown>> = [];
+  if (cardIds.length) {
+    const { data, error } = await supabase
+      .from("entertainment_cards")
+      .select("card_id, title, content_category")
+      .in("card_id", cardIds);
+    if (error) throw new Error(`load_activity_cards_failed: ${error.message}`);
+    cards = data ?? [];
+  }
+  const cardMap = new Map(cards.map((card) => [String(card.card_id), card]));
+  const cardFields = (cardId: string) => {
+    const card = cardMap.get(cardId);
+    return {
+      card_id: cardId,
+      title: String(card?.title ?? "一张今晚的卡"),
+      content_category: String(card?.content_category ?? "other")
+    };
+  };
+
+  const events = [
+    ...(draws ?? []).map((item: Record<string, unknown>) => {
+      const cardId = String(item.selected_card_id ?? "");
+      return {
+        event_id: `draw:${String(item.request_id)}`,
+        kind: "draw",
+        ...cardFields(cardId),
+        occurred_at: String(item.created_at)
+      };
+    }),
+    ...(feedback ?? []).map((item: Record<string, unknown>) => {
+      const cardId = String(item.card_id ?? "");
+      return {
+        event_id: `feedback:${String(item.event_id)}`,
+        kind: "feedback",
+        action: String(item.action ?? ""),
+        ...cardFields(cardId),
+        occurred_at: String(item.created_at)
+      };
+    })
+  ].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at));
+
+  return { events };
+}
+
 export async function getUserProfile(supabase: SupabaseClient, userId: string) {
   const { data, error } = await supabase
     .from("user_memory")

@@ -1,4 +1,5 @@
 import type {
+  ActivityHistoryEvent,
   AgentGateway,
   Card,
   DrawCardResult,
@@ -48,6 +49,7 @@ function missingFields(card: Card) {
 export class MockAgentGateway implements AgentGateway {
   private personalCards: Card[] = [];
   private memoryOverrides = new Map<string, "kept" | "cleared">();
+  private activityHistory: ActivityHistoryEvent[] = [];
   private profile: UserProfile = {
     user_id: "mock-user",
     onboarding_completed: false,
@@ -132,6 +134,29 @@ export class MockAgentGateway implements AgentGateway {
     };
   }
 
+  async getActivityHistory({ from, to }: { from: string; to: string }): Promise<{ events: ActivityHistoryEvent[] }> {
+    if (!this.activityHistory.length) {
+      const today = new Date();
+      const atDay = (offset: number, hour: number) => {
+        const date = new Date(today);
+        date.setDate(today.getDate() + offset);
+        date.setHours(hour, 20, 0, 0);
+        return date.toISOString();
+      };
+      this.activityHistory = [
+        { event_id: "demo-feedback-1", kind: "feedback", action: "complete", card_id: presets[1].card_id, title: presets[1].title, content_category: presets[1].content_category, occurred_at: atDay(-2, 21), is_demo: true },
+        { event_id: "demo-draw-2", kind: "draw", card_id: presets[0].card_id, title: presets[0].title, content_category: presets[0].content_category, occurred_at: atDay(-4, 20), is_demo: true },
+        { event_id: "demo-draw-3", kind: "draw", card_id: presets[2].card_id, title: presets[2].title, content_category: presets[2].content_category, occurred_at: atDay(-8, 19), is_demo: true },
+      ];
+    }
+    const start = new Date(from).getTime();
+    const end = new Date(to).getTime();
+    return { events: this.activityHistory.filter((event) => {
+      const occurredAt = new Date(event.occurred_at).getTime();
+      return occurredAt >= start && occurredAt < end;
+    }).sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)) };
+  }
+
   async parseCard(input: ParseCardInput): Promise<ParseCardResult> {
     const text = input.text?.trim() || "看看这张收藏里的娱乐内容";
     const category = text.includes("电影") ? "movie" : text.includes("游戏") ? "game" : "other";
@@ -186,10 +211,13 @@ export class MockAgentGateway implements AgentGateway {
     if (!candidates.length) return { type: "no_candidate", message: "这些条件有点严格，这次没有硬抽一个不合适的结果。", excluded_counts: excluded, relax_suggestions: [{ field: "available_time_min", label: "把可用时间放宽到 60 分钟", value: 60 }, { field: "source_scope", label: "同时看看产品推荐", value: "both" }] };
     const index = (context.available_time_min + (context.mood_preference?.length ?? 0) + recent_card_ids.length) % candidates.length;
     const card = candidates[index];
+    this.activityHistory.unshift({ event_id: `mock-draw-${Date.now()}`, kind: "draw", card_id: card.card_id, title: card.title, content_category: card.content_category, occurred_at: new Date().toISOString(), is_demo: true });
     return { type: "draw_result", card, reasons: [`能在 ${context.available_time_min} 分钟内开始`, context.outing_preference === "stay_in" ? "不需要出门" : "符合今晚的行动范围", card.prep_cost === "low" ? "准备成本很低" : "准备成本与当前状态匹配"], score: 82, weight: 1, candidate_count: candidates.length, candidate_version: "mock-v1" };
   }
 
   async submitFeedback({ card_id, action }: { card_id: string; action: FeedbackAction }): Promise<FeedbackResult> {
+    const card = [...this.personalCards, ...presets].find((item) => item.card_id === card_id);
+    if (card) this.activityHistory.unshift({ event_id: `mock-feedback-${Date.now()}`, kind: "feedback", action, card_id, title: card.title, content_category: card.content_category, occurred_at: new Date().toISOString(), is_demo: true });
     const effect = action === "complete"
       ? { short_term: "记录完成和真实体验", long_term: "相似内容适度加权", cooldown_hours: 72 }
       : action === "reroll"

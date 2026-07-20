@@ -137,6 +137,17 @@ export interface FeedbackResult {
   } | null;
 }
 
+export interface ActivityHistoryEvent {
+  event_id: string;
+  kind: "draw" | "feedback";
+  action?: FeedbackAction;
+  card_id: string;
+  title: string;
+  content_category: ContentCategory;
+  occurred_at: string;
+  is_demo?: boolean;
+}
+
 export interface UserProfile {
   user_id: string;
   onboarding_completed: boolean;
@@ -223,6 +234,7 @@ export interface AgentGateway {
   updateMemoryItem(input: { item_key: string; action: MemoryItemAction }): Promise<MemoryItemActionResult>;
   listCards(input?: { source_scope?: SourceScope; status?: CardStatus; eligible_only?: boolean; q?: string; limit?: number }): Promise<{ cards: Card[]; count: number }>;
   getWeatherContext(input: { city?: string | null; timezone?: string | null; latitude?: number | null; longitude?: number | null }): Promise<WeatherContext>;
+  getActivityHistory(input: { from: string; to: string }): Promise<{ events: ActivityHistoryEvent[] }>;
   parseCard(input: ParseCardInput): Promise<ParseCardResult>;
   saveCard(card: Card): Promise<SaveCardResult>;
   archiveCard(card_id: string): Promise<{ card: Card }>;
