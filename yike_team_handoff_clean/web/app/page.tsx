@@ -339,6 +339,36 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  // 邮箱确认后 Supabase 会把 token 放在 URL hash 里，自动读取并登录
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash;
+    if (!hash || !hash.includes("access_token")) return;
+    const params = new URLSearchParams(hash.slice(1));
+    const accessToken = params.get("access_token");
+    const refreshToken = params.get("refresh_token");
+    const type = params.get("type");
+    if (accessToken && type === "signup") {
+      try {
+        const session = persistAuthSession({
+          access_token: accessToken,
+          refresh_token: refreshToken || "",
+          token_type: "bearer",
+          expires_in: 3600,
+          user: { id: "" },
+        });
+        if (session.userId) {
+          window.dispatchEvent(new Event("yike-auth-change"));
+          showToast("邮箱确认成功，已自动登录");
+        }
+      } catch (e) {
+        showToast("邮箱确认链接已失效，请重新注册或重新发送确认邮件");
+      }
+    }
+    // 清理 URL hash
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  }, []);
+
   useEffect(() => {
     localStorage.setItem("yike-personal-cards", JSON.stringify(personalCards));
   }, [personalCards]);
@@ -908,16 +938,25 @@ function AuthPanel({ onToast, onDebug, onSignedOut, startExpanded = false }: {
     }
     setSubmitting(intent);
     try {
+      const redirectTo = typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined;
+      const signupBody: Record<string, unknown> = { email, password };
+      if (redirectTo) signupBody.data = { redirect_to: redirectTo };
       const response = await fetch(`${supabaseUrl}/auth/v1/${intent === "signin" ? "token?grant_type=password" : "signup"}`, {
         method: "POST",
         headers: {
           apikey: key,
           "content-type": "application/json",
         },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify(intent === "signup" ? { email, password, options: { emailRedirectTo: redirectTo } } : { email, password }),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(String(data.msg ?? data.error_description ?? data.error ?? (intent === "signin" ? "登录失败" : "注册失败")));
+      if (!response.ok) {
+        const errMsg = String(data.msg ?? data.error_description ?? data.error ?? (intent === "signin" ? "登录失败" : "注册失败"));
+        if (errMsg.includes("otp_expired") || errMsg.includes("expired") || errMsg.includes("token")) {
+          throw new Error("邮箱确认链接已失效，请重新注册或重新发送确认邮件");
+        }
+        throw new Error(errMsg);
+      }
       if (intent === "signup" && !data.access_token) {
         onDebug(JSON.stringify({ method: "supabaseAuth", status: "signup_pending_email_confirmation" }, null, 2));
         onToast("注册成功，请先完成邮箱确认后登录");
