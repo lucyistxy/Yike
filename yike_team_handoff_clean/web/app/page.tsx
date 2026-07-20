@@ -697,12 +697,19 @@ export default function Home() {
     if (!result) return;
     if (feedbackSubmitting) return;
     const gatewayAction: FeedbackAction = action === "not-suitable" ? "not_suitable" : action;
+    if (action === "accept") {
+      setAcceptanceNote("好好享受这个夜晚吧");
+      setFeedbackOpen(false);
+      setFeedbackInsight(null);
+    }
     setFeedbackSubmitting(true);
     try {
       const response = await gatewayRef.current.submitFeedback({ card_id: result.id, action: gatewayAction });
-      const insight = buildFeedbackInsight(result, response);
-      setFeedbackInsight(action === "accept" ? null : insight);
-      setMemoryNote(`${insight.actionLabel}：${insight.memoryShift}`);
+      if (action !== "accept") {
+        const insight = buildFeedbackInsight(result, response);
+        setFeedbackInsight(insight);
+        setMemoryNote(`${insight.actionLabel}：${insight.memoryShift}`);
+      }
       setDebugLog(JSON.stringify({ method: "submitFeedback", request: { card_id: result.id, action: gatewayAction }, response }, null, 2));
       if (result.source === "personal") {
         setResult({ ...result, status: response.status });
@@ -710,7 +717,7 @@ export default function Home() {
       }
       setFeedbackOpen(false);
       setAcceptanceNote(action === "accept" ? "好好享受这个夜晚吧" : "");
-      showToast(action === "accept" ? "已确认，就从这张开始" : "反馈已记录");
+      showToast(action === "accept" ? "好好享受这个夜晚吧" : "反馈已记录");
     } catch (error) {
       const message = error instanceof Error ? error.message : "反馈失败";
       setDebugLog(JSON.stringify({ method: "submitFeedback", request: { card_id: result.id, action: gatewayAction }, error: message }, null, 2));
@@ -1136,8 +1143,8 @@ function ResultView({ card, reasons, revealing, feedbackOpen, feedbackSubmitting
     <div className="context-trace"><span>本次参考</span><strong>{ambient.localTime} · {weatherText(ambient.weather)}</strong></div>
     {careNotice && <div className="care-notice"><span>关怀提醒</span><p>{careNotice}</p></div>}
     <div className="result-actions"><button className="primary-button" onClick={onAccept} disabled={feedbackSubmitting || revealing || Boolean(acceptanceNote)}>{feedbackSubmitting ? "记录中…" : acceptanceNote ? "已选择" : "就它"}</button>{acceptanceNote && <div className="acceptance-note">{acceptanceNote}</div>}<div className="result-secondary-actions"><button className="secondary-button" onClick={onExchange} disabled={feedbackSubmitting || revealing}>换一张</button><button className="secondary-button" onClick={onContext} disabled={feedbackSubmitting || revealing}>改条件</button></div>{card.source === "preset" && <button className="text-button" onClick={onCopy} disabled={feedbackSubmitting || revealing}>存成我的卡</button>}{!acceptanceNote && <button className="feedback-link" onClick={() => setFeedbackOpen(!feedbackOpen)} disabled={feedbackSubmitting || revealing}>{feedbackOpen ? "收起反馈" : "这张卡怎么样？"}</button>}</div>
-    {feedbackInsight && <FeedbackInsightPanel insight={feedbackInsight} />}
-    {feedbackOpen && <div className="feedback-grid"><Feedback title="已完成" impact="长期加权" body="记录真实体验，轻轻增加相似内容" disabled={feedbackSubmitting} onClick={() => onFeedback("complete")} /><Feedback title="当下不合适" impact="仅短期" body="只做短期调整，不理解为讨厌" disabled={feedbackSubmitting} onClick={() => onFeedback("not-suitable")} /><Feedback title="以后再说" impact="冷却保留" body="保留兴趣，先放回稍后口袋" disabled={feedbackSubmitting} onClick={() => onFeedback("later")} /><Feedback title="不喜欢" impact="长期降权" body="显著减少类似内容，仍可撤回" disabled={feedbackSubmitting} onClick={() => onFeedback("dislike")} /></div>}
+    {!acceptanceNote && feedbackInsight && <FeedbackInsightPanel insight={feedbackInsight} />}
+    {!acceptanceNote && feedbackOpen && <div className="feedback-grid"><Feedback title="已完成" impact="长期加权" body="记录真实体验，轻轻增加相似内容" disabled={feedbackSubmitting} onClick={() => onFeedback("complete")} /><Feedback title="当下不合适" impact="仅短期" body="只做短期调整，不理解为讨厌" disabled={feedbackSubmitting} onClick={() => onFeedback("not-suitable")} /><Feedback title="以后再说" impact="冷却保留" body="保留兴趣，先放回稍后口袋" disabled={feedbackSubmitting} onClick={() => onFeedback("later")} /><Feedback title="不喜欢" impact="长期降权" body="显著减少类似内容，仍可撤回" disabled={feedbackSubmitting} onClick={() => onFeedback("dislike")} /></div>}
   </div>;
 }
 
