@@ -262,6 +262,22 @@ function shellForCategory(category: string) {
   return shellCategories.find((item) => item.category === category) ?? shellCategories[shellCategories.length - 1];
 }
 
+const otterArtMap: Record<string, string> = {
+  书籍: "/art/yike/otter-reading.png",
+  电影: "/art/yike/otter-movie.png",
+  剧集: "/art/yike/otter-series.png",
+  美食: "/art/yike/otter-food.png",
+  展览: "/art/yike/otter-exhibition.png",
+  游戏: "/art/yike/otter-game.png",
+  手作: "/art/yike/otter-craft.png",
+  散步: "/art/yike/otter-walk.png",
+  其他: "/art/yike/otter-other.png",
+};
+
+function otterArtForCategory(category: string) {
+  return otterArtMap[category] ?? otterArtMap["其他"];
+}
+
 function BrandLockup({ compact = false }: { compact?: boolean }) {
   return <div className={`brand-lockup art-brand ${compact ? "compact" : ""}`}><img src="/art/yike/logo-yike.webp" alt="Yike 宜刻" /></div>;
 }
@@ -722,7 +738,7 @@ export default function Home() {
       <aside className="desktop-sidebar">
         <BrandLockup />
         {appReady && <nav aria-label="主导航">{navItems.map((item) => <button key={item.id} className={view === item.id ? "current" : ""} onClick={() => go(item.id)}><span>{item.icon}</span>{item.label}</button>)}</nav>}
-        <div className="sidebar-companion"><p>今天辛苦啦，今晚只拾一件刚刚好的事。</p></div>
+        <img className="sidebar-handwritten" src="/art/yike/handwritten-sidebar2.png" alt="今天辛苦啦，快来和小宜一起捡拾贝壳吧" />
       </aside>
 
       <section className="main-stage">
@@ -966,7 +982,7 @@ function HomeView({ context, contextSummary, ambient, drawing, drawPhase, noCand
       <div className="source-selector"><span>从哪里抽</span><div>{(["personal", "preset", "both"] as SourceScope[]).map((source) => <Chip key={source} active={context.source === source} onClick={() => setContext((value) => ({ ...value, source }))}>{sourceText[source]}</Chip>)}</div></div>
       <button className={`card-pack draw-ritual phase-${drawPhase}`} onClick={onDraw} disabled={drawing} aria-label={drawing ? "正在抽取一张娱乐卡" : "抽一张娱乐卡"}>
         <span className="pack-stitch" />
-        <span className="draw-copy"><span className="pack-label">TONIGHT&apos;S PICK</span><strong>{drawing ? "小宜正在打开贝壳…" : "轻轻拆开"}</strong><small>{contextSummary}</small></span>
+        <span className="draw-copy"><span className="pack-label">TONIGHT&apos;S PICK</span>{drawing ? <strong>小宜正在打开贝壳…</strong> : <img className="draw-handwritten" src="/art/yike/handwritten-draw.png" alt="轻轻拆开" />}<small>{contextSummary}</small></span>
         <span className="draw-stage" aria-hidden="true"><img className="draw-otter hold" src="/art/yike/otter-hold-shell.webp" alt="" /><img className="draw-otter lift" src="/art/yike/otter-lift-shell.webp" alt="" /></span>
       </button>
       <button className="primary-button draw-button" onClick={onDraw} disabled={drawing}>{drawing ? "正在匹配此刻…" : "抽一张"}</button>
@@ -1015,7 +1031,7 @@ function AddView({ inputText, imageName, imagePreview, parseStep, draft, fileInp
 }) {
   return <div className="view add-view"><div className="eyebrow">CAPTURE · 收进小岛</div><div className="page-title"><div><h1>把种草，变成一张能抽的卡</h1><p>截图或文字都可以。Agent 先整理，你只确认真正影响执行的字段。</p></div><span className="step-badge">约 10 秒</span></div>
     {parseStep === "input" && <div className="add-grid capture-book"><span className="book-rings" aria-hidden="true" /><button className="upload-zone" onClick={() => fileInputRef.current?.click()}>{imagePreview ? <img src={imagePreview} alt="待识别截图预览" /> : <><span className="upload-icon">＋</span><strong>上传截图或图片</strong><small>支持 PNG、JPG，原图默认私有</small></>}<input ref={fileInputRef} type="file" accept="image/*" hidden onChange={onImage} /></button><div className="text-entry"><label htmlFor="capture-text">粘贴文字或手动输入</label><textarea id="capture-text" value={inputText} onChange={(event) => setInputText(event.target.value)} placeholder="例如：周末想去看海边主题展，听说现场很安静……" /><div className="entry-meta"><span>{imageName || "也可以只输入标题"}</span><span>{inputText.length}/300</span></div></div><button className="primary-button wide" onClick={onParse}>开始整理</button></div>}
-    {(parseStep === "reading" || parseStep === "organizing") && <div className="agent-progress"><div className="progress-visual"><div className="scan-line" /><img src="/art/yike/shell-pearl.webp" alt="" /><img src="/art/yike/otter-companion.webp" alt="正在工作的海獭小宜" /></div><h2>{parseStep === "reading" ? "正在看懂这份收藏…" : "正在整理执行信息…"}</h2><div className="progress-steps"><span className="done">看内容</span><i /><span className={parseStep === "organizing" ? "done" : ""}>整理字段</span><i /><span>生成草稿</span></div></div>}
+    {(parseStep === "reading" || parseStep === "organizing") && <div className="agent-progress"><div className="progress-visual"><div className="scan-line" /><img src="/art/yike/shell-pearl.webp" alt="" /><img src="/art/yike/otter-companion.webp" alt="正在工作的海獭小宜" /></div><h2>{parseStep === "reading" ? "正在看懂这份收藏…" : "正在整理执行信息…"}</h2><div className="progress-steps"><span className="done">看内容</span><i /><span className={parseStep === "organizing" ? "done" : ""}>整理字段</span><i /><span>生成草稿</span></div><div className="parse-progress-bar"><div className="parse-progress-fill" style={{ width: parseStep === "reading" ? "33%" : "66%" }} /></div></div>}
     {parseStep === "draft" && draft && <div className="draft-layout"><div className="agent-summary"><img className="summary-shell" src="/art/yike/shell-pearl.webp" alt="" /><div><span>AGENT 已整理</span><h2>一张可执行的娱乐卡</h2><p>蓝色提示表示模型置信度较低，你可以随时改。</p></div><img src="/art/yike/otter-companion.webp" alt="海獭小宜" /></div><div className="draft-form"><Field label="标题" hint="已识别"><input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></Field><Field label="娱乐类别" hint="请确认" uncertain><select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })}><option>电影</option><option>剧集</option><option>书籍</option><option>美食</option><option>展览</option><option>游戏</option><option>手作</option><option>散步</option><option>其他</option></select></Field><Field label="预计时长" hint="请确认" uncertain><input type="number" value={draft.duration} onChange={(event) => setDraft({ ...draft, duration: Number(event.target.value) })} /><em>分钟</em></Field><Field label="精力"><select value={draft.energy} onChange={(event) => setDraft({ ...draft, energy: event.target.value as Level })}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></Field><Field label="室内外"><select value={draft.outing} onChange={(event) => setDraft({ ...draft, outing: event.target.value as Card["outing"] })}><option value="indoor">室内</option><option value="outdoor">室外</option><option value="either">均可</option></select></Field><Field label="准备成本"><select value={draft.prep} onChange={(event) => setDraft({ ...draft, prep: event.target.value as Level })}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></Field></div><button className="primary-button wide" onClick={onSave}>保存到我的卡池</button></div>}
   </div>;
 }
@@ -1055,7 +1071,7 @@ function ResultView({ card, reasons, revealing, feedbackOpen, feedbackSubmitting
     <div className="result-heading"><div><h1>今晚，就从这一件开始</h1><p>只给一张，也告诉你为什么是它。</p></div><img src="/otter-side.png" alt="为你揭晓结果的海獭小宜" /></div>
     <div className="result-reveal-stage">
       <article className={`result-card ${revealing ? "revealing" : ""}`}>
-        <div className={`result-art ${card.imageUrl ? "has-image" : ""}`}>{card.imageUrl ? <img src={card.imageUrl} alt={card.title} /> : <><div className="window-shape"><span /></div><div className="cup-shape" /><div className="result-moon" /><span className="result-shell">◇</span></>}</div>
+        <div className={`result-art ${card.imageUrl ? "has-image" : "has-otter"}`}>{card.imageUrl ? <img src={card.imageUrl} alt={card.title} /> : <img className="result-otter-art" src={otterArtForCategory(card.category)} alt={`${card.category}海獭插画`} />}</div>
         <div className="result-content"><div className="result-badges"><SourceBadge source={card.source} /><span>{card.category}</span></div><h2>{card.title}</h2><p className="result-meta">预计 {card.duration} 分钟　·　{card.outing === "indoor" ? "室内" : card.outing === "outdoor" ? "室外" : "均可"}　·　{levelText[card.prep]}准备</p><div className="reason-block"><strong>为什么现在适合</strong>{reasons.map((reason) => <p key={reason}><span>●</span>{reason}</p>)}</div><div className="companion-line">小宜：今晚只把节奏放慢一点，也很好。</div></div>
       </article>
       {revealing && <div className="result-pearl-reveal" aria-hidden="true"><i /><img src="/art/yike/pearl-card.webp" alt="" /></div>}
