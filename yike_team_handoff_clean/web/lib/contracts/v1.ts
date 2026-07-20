@@ -61,6 +61,7 @@ export interface WeatherContext {
   city?: string | null;
   weather?: string | null;
   temperature?: number | null;
+  apparent_temperature?: number | null;
   rain_probability?: number | null;
   weather_tags: string[];
   observed_at?: string;
@@ -238,6 +239,7 @@ export interface AgentGateway {
   parseCard(input: ParseCardInput): Promise<ParseCardResult>;
   saveCard(card: Card): Promise<SaveCardResult>;
   archiveCard(card_id: string): Promise<{ card: Card }>;
+  updateCard(card_id: string, updates: Partial<Card>): Promise<{ card: Card }>;
   deleteCard(card_id: string): Promise<{ card_id: string; deleted: boolean }>;
   drawCard(input: { context: DrawContext; recent_card_ids: string[] }): Promise<DrawCardResult>;
   submitFeedback(input: { card_id: string; action: FeedbackAction; reason?: string; actual_duration_min?: number }): Promise<FeedbackResult>;
