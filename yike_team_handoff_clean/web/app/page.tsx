@@ -738,7 +738,10 @@ export default function Home() {
       <aside className="desktop-sidebar">
         <BrandLockup />
         {appReady && <nav aria-label="主导航">{navItems.map((item) => <button key={item.id} className={view === item.id ? "current" : ""} onClick={() => go(item.id)}><span>{item.icon}</span>{item.label}</button>)}</nav>}
-        <img className="sidebar-handwritten" src="/art/yike/handwritten-sidebar2.png" alt="今天辛苦啦，快来和小宜一起捡拾贝壳吧" />
+        <div className="sidebar-bottom">
+          <img className="sidebar-otter" src="/art/yike/otter-sidebar.png" alt="海獭" />
+          <img className="sidebar-handwritten" src="/art/yike/handwritten-sidebar2.png" alt="今天辛苦啦，快来和小宜一起捡拾贝壳吧" />
+        </div>
       </aside>
 
       <section className="main-stage">

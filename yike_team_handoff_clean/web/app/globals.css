@@ -40,7 +40,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .desktop-sidebar nav button { display: flex; align-items: center; gap: 14px; width: 100%; padding: 13px 16px; border: 0; border-radius: 17px; background: transparent; color: var(--muted); text-align: left; transition: 160ms ease; }
 .desktop-sidebar nav button span { display: grid; width: 31px; height: 31px; place-items: center; border-radius: 11px; background: rgba(229, 209, 185, 0.48); font-size: 18px; }
 .desktop-sidebar nav button:hover, .desktop-sidebar nav button.current { background: var(--surface); color: var(--brown); box-shadow: 0 8px 30px rgba(94, 64, 52, 0.06); }
-.sidebar-handwritten { display: block; width: 100%; max-width: 240px; margin: 20px auto 0; opacity: .82; }
+.sidebar-bottom { position: absolute; bottom: 28px; left: 22px; right: 22px; display: flex; flex-direction: column; align-items: center; gap: 0; }
+.sidebar-otter { display: block; width: 100%; max-width: 160px; height: auto; opacity: .9; margin-bottom: -12px; }
+.sidebar-handwritten { display: block; width: 100%; max-width: 240px; opacity: .82; }
 .sidebar-companion { position: absolute; right: 22px; bottom: 28px; left: 22px; padding: 18px; border: 1px solid var(--line); border-radius: 24px; background: var(--foam); }
 .sidebar-companion img { display: block; width: 82px; height: 82px; margin: -58px auto 8px; object-fit: contain; }
 .sidebar-companion p { margin: 0; color: #58707b; font-family: var(--font-hand); font-size: 14px; line-height: 1.65; }
