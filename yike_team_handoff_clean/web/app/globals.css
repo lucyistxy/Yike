@@ -2,7 +2,7 @@
   font-family: "Yike Handwriting";
   src: url("/fonts/YikeHandwritingWeb-Regular.woff2") format("woff2");
   font-style: normal;
-  font-weight: 400;
+  font-weight: 100 900;
   font-display: swap;
 }
 
@@ -75,8 +75,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .preference-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .preference-columns .chip-row { margin-top: 10px; }
 .eyebrow { margin-bottom: 18px; color: var(--sky-deep); font-family: var(--font-hand); font-size: 12px; font-weight: 700; letter-spacing: 2.6px; }
-.page-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 26px; margin-bottom: 34px; }
-.page-title h1 { margin: 0 0 10px; font-family: var(--font-hand); font-size: clamp(34px, 4.2vw, 52px); font-weight: 500; line-height: 1.22; }
+.page-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 26px; margin-bottom: 20px; }
+.page-title h1 { margin: 0 0 10px; font-family: var(--font-hand); font-size: clamp(34px, 4.2vw, 52px); font-weight: 500; line-height: 1.22; }.page-title-handwritten { display: block; max-width: 420px; width: 100%; height: auto; margin-bottom: 4px; }
 .page-title p { max-width: 620px; margin: 0; color: var(--muted); line-height: 1.7; }
 .step-badge { flex: none; padding: 9px 14px; border-radius: 999px; background: var(--foam); color: #507586; font-size: 12px; font-weight: 700; }
 .memory-handwritten { width: 260px; height: auto; opacity: .78; flex: none; }
@@ -276,9 +276,9 @@ body {
 .journal-reference-art { position:absolute; inset:0; display:block; width:100%; height:100%; object-fit:contain; pointer-events:none; }
 .journal-dynamic-copy { position:absolute; top:0; bottom:0; left:0; z-index:2; display:flex; width:49.5%; min-width:0; flex-direction:column; justify-content:center; padding:7.2% 4.8% 7% 7.8%; overflow:hidden; }
 .journal-dynamic-copy .kicker { margin:0 0 4.2%; color:var(--ink); font-family:var(--font-hand); font-size:clamp(9px,1.55cqi,18px); line-height:1.25; letter-spacing:.05em; white-space:nowrap; }
-.journal-dynamic-copy h1 { margin:0; font-family:var(--font-hand); font-size:clamp(18px,5.35cqi,56px); font-weight:500; line-height:1.18; letter-spacing:.035em; }
+.journal-dynamic-copy h1 { margin:0; font-family:var(--font-hand); font-size:clamp(18px,5.35cqi,56px); font-weight:500; line-height:1.18; letter-spacing:.035em; }.journal-handwritten { display:block; max-width:340px; width:100%; height:auto; margin:0 0 2%; }
 .journal-dynamic-copy h1 span { display:block; min-height:1.18em; white-space:nowrap; }
-.journal-dynamic-copy > p:last-child { margin:5.2% 0 0; color:var(--muted); font-size:clamp(8px,1.2cqi,14px); line-height:1.72; white-space:nowrap; }
+.journal-dynamic-copy > p:last-child { margin:-3% 0 0; color:var(--muted); font-size:clamp(10px,1.6cqi,16px); line-height:1.72; white-space:nowrap; }
 .ambient-strip { border-radius:18px 22px 16px 20px; background:rgba(221,237,241,.72); box-shadow:3px 4px 0 rgba(112,81,66,.04); }
 .pick-section { border-radius:31px 38px 34px 28px; background:rgba(255,250,241,.72); box-shadow:var(--paper-shadow); }
 
@@ -404,7 +404,7 @@ body {
   .journal-dynamic-copy .kicker { margin-bottom:3%; font-size:clamp(8px,1.8cqi,10px); }
   .journal-dynamic-copy h1 { font-size:clamp(17px,5.6cqi,25px); line-height:1.16; }
   .journal-dynamic-copy h1 span { min-height:1.16em; }
-  .journal-dynamic-copy > p:last-child { margin-top:3.5%; font-size:clamp(7px,2.05cqi,9px); line-height:1.48; letter-spacing:-.02em; }
+  .journal-dynamic-copy > p:last-child { margin-top:-2%; font-size:clamp(7px,2.05cqi,9px); line-height:1.48; letter-spacing:-.02em; }
   .hero-watercolor { position:absolute; right:0; bottom:0; left:0; min-height:300px; border-radius:0 0 28px 26px; }.hero-watercolor .landscape-art { width:100%; height:100%; object-fit:cover; object-position:center 50%; }.hero-watercolor .hero-otter { width:118px; height:132px; }
   .ambient-strip { align-items:flex-start; flex-wrap:wrap; }.ambient-strip p { flex-basis:100%; }
   .pick-section { padding:22px 16px; }
