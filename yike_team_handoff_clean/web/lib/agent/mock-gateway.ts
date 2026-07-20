@@ -128,6 +128,7 @@ export class MockAgentGateway implements AgentGateway {
       source: "mock",
       weather: "cloudy",
       temperature: 24,
+      apparent_temperature: 24,
       rain_probability: 0,
       weather_tags: [],
       observed_at: new Date().toISOString(),
@@ -196,20 +197,38 @@ export class MockAgentGateway implements AgentGateway {
     return { card: archived };
   }
 
+  async updateCard(card_id: string, updates: Partial<Card>): Promise<{ card: Card }> {
+    const current = this.personalCards.find((item) => item.card_id === card_id);
+    const updated = {
+      ...(current ?? this.personalCards[0]),
+      ...updates,
+      card_id,
+      status: "active" as const,
+    };
+    this.personalCards = this.personalCards.map((item) => item.card_id === card_id ? updated : item);
+    return { card: updated };
+  }
+
   async drawCard({ context, recent_card_ids }: { context: DrawContext; recent_card_ids: string[] }): Promise<DrawCardResult> {
     const pool = [...this.personalCards, ...presets];
     const excluded = { source: 0, duration: 0, outing: 0, constraint: 0, unavailable: 0, recent: 0 };
     const candidates = pool.filter((card) => {
       if (context.source_scope !== "both" && card.source_type !== context.source_scope) { excluded.source += 1; return false; }
       if (!card.eligible_for_draw || card.status !== "active") { excluded.unavailable += 1; return false; }
-      if ((card.duration_max ?? card.duration_min ?? Infinity) > context.available_time_min) { excluded.duration += 1; return false; }
       if (context.outing_preference === "stay_in" && card.indoor_outdoor === "outdoor") { excluded.outing += 1; return false; }
+      if ((card.duration_max ?? card.duration_min ?? Infinity) > context.available_time_min) { excluded.duration += 1; return false; }
+      if ((card.duration_max ?? card.duration_min ?? 0) < Math.ceil(context.available_time_min / 2)) { excluded.duration += 1; return false; }
       if (context.session_constraints?.includes("no-standing") && card.content_category === "walk") { excluded.constraint += 1; return false; }
       if (recent_card_ids.includes(card.card_id)) { excluded.recent += 1; return false; }
       return true;
     });
-    if (!candidates.length) return { type: "no_candidate", message: "这些条件有点严格，这次没有硬抽一个不合适的结果。", excluded_counts: excluded, relax_suggestions: [{ field: "available_time_min", label: "把可用时间放宽到 60 分钟", value: 60 }, { field: "source_scope", label: "同时看看产品推荐", value: "both" }] };
-    const index = Math.floor(Math.random() * candidates.length);
+    if (!candidates.length) {
+      const relax_suggestions = context.available_time_min >= 60
+        ? [{ field: "source_scope", label: "同时看看产品推荐", value: "both" }, { field: "outing_preference", label: "允许出门", value: "can_go_out" }]
+        : [{ field: "available_time_min", label: "放宽可用时间", value: 60 }, { field: "source_scope", label: "同时看看产品推荐", value: "both" }];
+      return { type: "no_candidate", message: "这些条件有点严格，这次没有硬抽一个不合适的结果。", excluded_counts: excluded, relax_suggestions };
+    }
+    const index = (context.available_time_min + (context.mood_preference?.length ?? 0) + recent_card_ids.length) % candidates.length;
     const card = candidates[index];
     this.activityHistory.unshift({ event_id: `mock-draw-${Date.now()}`, kind: "draw", card_id: card.card_id, title: card.title, content_category: card.content_category, occurred_at: new Date().toISOString(), is_demo: true });
     return { type: "draw_result", card, reasons: [`能在 ${context.available_time_min} 分钟内开始`, context.outing_preference === "stay_in" ? "不需要出门" : "符合今晚的行动范围", card.prep_cost === "low" ? "准备成本很低" : "准备成本与当前状态匹配"], score: 82, weight: 1, candidate_count: candidates.length, candidate_version: "mock-v1" };

@@ -46,7 +46,7 @@ export class HttpAgentGateway implements AgentGateway {
 
   constructor(options: HttpAgentGatewayOptions = {}) {
     this.baseUrl = stripTrailingSlash(
-      options.baseUrl ?? process.env.NEXT_PUBLIC_YIKE_AGENT_BASE_URL ?? "",
+      options.baseUrl ?? process.env.NEXT_PUBLIC_YIKE_AGENT_BASE_URL ?? defaultAgentBaseUrl(),
     );
     this.configuredUserId = options.userId ?? process.env.NEXT_PUBLIC_YIKE_USER_ID;
     this.configuredAccessToken = options.accessToken;
@@ -204,6 +204,20 @@ export class HttpAgentGateway implements AgentGateway {
         user_id: auth.userId,
         card_id,
         action: "archive",
+      },
+    });
+    return { card: normalizeCard(response.card as Record<string, unknown>) };
+  }
+
+  async updateCard(card_id: string, updates: Partial<Card>): Promise<{ card: Card }> {
+    const auth = await this.getAuth();
+    const response = await this.request<Record<string, unknown>>("cards", {
+      method: "PATCH",
+      body: {
+        user_id: auth.userId,
+        card_id,
+        action: "restore",
+        updates: toBackendCard(updates),
       },
     });
     return { card: normalizeCard(response.card as Record<string, unknown>) };
@@ -399,7 +413,7 @@ export function persistAuthSession(data: Record<string, unknown>) {
 }
 
 export function canUseHttpAgentGateway() {
-  return Boolean(process.env.NEXT_PUBLIC_YIKE_AGENT_BASE_URL);
+  return Boolean(process.env.NEXT_PUBLIC_YIKE_AGENT_BASE_URL || defaultAgentBaseUrl());
 }
 
 export function clearAuthSession() {
@@ -438,6 +452,11 @@ function decodeJwtExpMs(token: string) {
 
 function getSupabaseAuthUrl() {
   return stripTrailingSlash(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
+}
+
+function defaultAgentBaseUrl() {
+  const supabaseUrl = stripTrailingSlash(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
+  return supabaseUrl ? `${supabaseUrl}/functions/v1` : "";
 }
 
 function formatNetworkError(path: string, error: unknown) {
@@ -532,9 +551,10 @@ function normalizeWeatherContext(raw: Record<string, unknown>): WeatherContext {
     city: typeof raw.city === "string" ? raw.city : null,
     weather: typeof raw.weather === "string" ? raw.weather : null,
     temperature: raw.temperature == null ? null : Number(raw.temperature),
+    apparent_temperature: raw.apparent_temperature == null ? null : Number(raw.apparent_temperature),
     rain_probability: raw.rain_probability == null ? null : Number(raw.rain_probability),
     weather_tags: normalizeStringArray(raw.weather_tags),
-    observed_at: new Date().toISOString(),
+    observed_at: typeof raw.observed_at === "string" ? raw.observed_at : new Date().toISOString(),
   };
 }
 
