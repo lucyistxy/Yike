@@ -61,7 +61,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .dev-auth-form .secondary-button, .dev-auth-form .primary-button { min-height: 42px; padding: 9px 15px; border-radius: 13px; font-size: 12px; white-space: nowrap; }
 .auth-landing { min-height: calc(100vh - 120px); display: grid; align-content: center; }
 .auth-hero { display: grid; grid-template-columns: 1fr 150px; gap: 24px; align-items: center; margin-bottom: 22px; padding: 34px; border: 1px solid var(--line); border-radius: 32px; background: var(--surface); box-shadow: var(--shadow); }
-.auth-hero h1 { margin: 0; font-family: var(--font-hand); font-size: clamp(36px, 4vw, 54px); font-weight: 500; line-height: 1.25; }.auth-handwritten { display: block; max-width: 680px; width: 100%; height: auto; margin-bottom: 14px; }
+.auth-hero h1 { margin: 0; font-family: var(--font-hand); font-size: clamp(36px, 4vw, 54px); font-weight: 500; line-height: 1.25; }.auth-handwritten { display: block; max-width: 1200px; width: 100%; height: auto; margin-bottom: 14px; }
 .auth-hero p { max-width: 520px; margin: 14px 0 0; color: var(--muted); line-height: 1.7; }
 .auth-hero img { width: 140px; height: 150px; object-fit: contain; }
 .loading-view .agent-progress p { max-width: 480px; margin: 10px auto 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
