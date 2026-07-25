@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     title: "宜刻 Yike｜今晚，拾一件刚刚好的事",
     description: "把收藏整理成可执行的娱乐卡，在此刻的条件里只抽一张。",
     type: "website",
-    images: [{ url: "/yike-social-card.png", width: 1731, height: 909, alt: "海獭小宜在雾海边捧着一枚贝壳" }],
+    images: [{ url: "/yike-social-card.png", width: 1731, height: 909, alt: "海獭小宜在薰衣草花园里捧着一颗花种" }],
   },
   twitter: {
     card: "summary_large_image",
