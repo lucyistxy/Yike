@@ -504,13 +504,18 @@ body {
 .petal-pool small { color:var(--muted); font-size:11px; }
 .petal-pool p { margin:17px 0; color:var(--muted); font-size:11px; line-height:1.7; }
 .lavender-garden { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 10px; margin:18px 0 4px; }
+.lavender-garden.single-plot { grid-template-columns:minmax(0, 184px); justify-content:start; min-height:154px; gap:0; margin-top:20px; }
 .garden-plot { position:relative; display:grid; min-height:104px; overflow:visible; place-items:end center; padding:8px 3px 20px; border:1px dashed rgba(112,81,66,.16); border-radius:18px 21px 17px 19px; background:rgba(255,250,241,.46); }
 .garden-plot img { width:100%; max-width:130px; height:82px; object-fit:contain; transform-origin:50% 95%; animation:lavender-sway 3.8s ease-in-out infinite; filter:drop-shadow(0 7px 7px rgba(82,60,48,.05)); }
+.lavender-garden.single-plot .garden-plot { width:184px; min-height:146px; padding:10px 5px 23px; border-radius:20px 23px 19px 22px; }
+.lavender-garden.single-plot .garden-plot img { max-width:174px; height:114px; }
 .garden-plot.empty img { animation-duration:5.2s; opacity:.82; }
 .garden-plot.sprout img { animation-duration:4.6s; }
 .garden-plot.bloom img { animation-duration:3.4s; }
 .garden-plot > span { position:absolute; top:9px; left:10px; color:rgba(112,81,66,.42); font-size:9px; letter-spacing:0; }
 .garden-plot > small { position:absolute; right:9px; bottom:7px; color:var(--muted); font-size:8px; }
+.lavender-garden.single-plot .garden-plot > span { font-size:10px; }
+.lavender-garden.single-plot .garden-plot > small { font-size:9px; }
 .petal-ledger-preview { display:grid; gap:10px; margin-top:18px; }
 .petal-ledger-preview > span { padding:12px; border:1px dashed rgba(112,81,66,.22); border-radius:16px; color:var(--muted); font-size:10px; line-height:1.6; letter-spacing:0; }
 .petal-ledger-preview article { display:flex; align-items:center; gap:10px; padding:10px 0; border-top:1px dashed rgba(112,81,66,.16); }
@@ -576,7 +581,7 @@ body {
   .achievement-hero div { padding:24px; }.achievement-hero h1 { font-size:40px; }.achievement-board { padding:20px 14px; }.achievement-head,.achievement-toolbar { display:block; }.achievement-stats { margin-top:14px; flex-wrap:wrap; }.achievement-toolbar select { width:100%; margin-top:12px; }.achievement-grid { grid-template-columns:1fr; }.achievement-card { min-height:0; }
   .memory-top-row { grid-template-columns:1fr; gap:14px; }
   .memory-calendar,.memory-top-row .memory-calendar { min-height:520px; margin:8px 0 0; padding:86px 68px 80px; }.calendar-shell-frame { inset:0; width:100%; height:100%; object-fit:contain; }.calendar-head { grid-template-columns:30px 1fr 30px; }.calendar-head button { width:30px; height:30px; }.calendar-head h2 { font-size:18px; }.calendar-weekdays { margin-top:14px; }.calendar-grid button { min-height:42px; font-size:10px; }
-  .petal-pool { margin-top:0; padding:20px; }.lavender-garden { grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }.garden-plot { min-height:94px; padding:6px 3px 18px; }.garden-plot img { max-width:108px; height:72px; }.garden-plot > small { font-size:7px; }.petal-pool strong { font-size:44px; }
+  .petal-pool { margin-top:0; padding:20px; }.lavender-garden { grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }.lavender-garden.single-plot { grid-template-columns:minmax(0, 168px); min-height:140px; }.garden-plot { min-height:94px; padding:6px 3px 18px; }.lavender-garden.single-plot .garden-plot { width:168px; min-height:136px; }.garden-plot img { max-width:108px; height:72px; }.lavender-garden.single-plot .garden-plot img { max-width:158px; height:104px; }.garden-plot > small { font-size:7px; }.petal-pool strong { font-size:44px; }
   .day-memory { padding:18px; }.memory-grid { grid-template-columns:1fr; }
   .feedback-insight dl { grid-template-columns:1fr; }
 }
