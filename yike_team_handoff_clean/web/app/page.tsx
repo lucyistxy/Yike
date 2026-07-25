@@ -7,7 +7,7 @@ import { createAgentGateway } from "../lib/agent";
 import { clearAuthSession, persistAuthSession } from "../lib/agent/http-gateway";
 import type { ActivityHistoryEvent, Card as ContractCard, ContentCategory, DrawContext, FeedbackAction, FeedbackResult, MemoryItemAction, MemorySummary, UserProfile, WeatherContext } from "../lib/contracts/v1";
 
-type View = "home" | "pool" | "add" | "memory" | "result" | "activity";
+type View = "home" | "pool" | "add" | "memory" | "achievements" | "result" | "activity";
 type Source = "personal" | "preset";
 type SourceScope = Source | "both";
 type Level = "low" | "medium" | "high";
@@ -104,6 +104,7 @@ const navItems: Array<{ id: Exclude<View, "result" | "activity">; label: string;
   { id: "pool", label: "卡池", icon: "◇" },
   { id: "add", label: "添加", icon: "+" },
   { id: "memory", label: "记忆", icon: "✦" },
+  { id: "achievements", label: "潮汐花笺", icon: "✿" },
 ];
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -117,15 +118,48 @@ const realAgentEnabled = Boolean(process.env.NEXT_PUBLIC_YIKE_AGENT_BASE_URL);
 const categoryToContract: Record<string, ContentCategory> = { 书籍: "book", 电影: "movie", 剧集: "series", 美食: "food", 展览: "exhibition", 游戏: "game", 手作: "craft", 散步: "walk", 其他: "other", 播客: "other" };
 const categoryFromContract: Record<ContentCategory, string> = { book: "书籍", movie: "电影", series: "剧集", food: "美食", exhibition: "展览", game: "游戏", craft: "手作", walk: "散步", other: "其他" };
 const shellCategories: Array<{ category: string; contract: ContentCategory; image: string; note: string }> = [
-  { category: "书籍", contract: "book", image: "/art/yike/shell-scallop.webp", note: "一页一页展开" },
-  { category: "电影", contract: "movie", image: "/art/yike/shell-nautilus.webp", note: "让故事慢慢旋转" },
-  { category: "剧集", contract: "series", image: "/art/yike/shell-cowrie.webp", note: "留住连续的期待" },
-  { category: "美食", contract: "food", image: "/art/yike/shell-pearl.webp", note: "收藏一口好滋味" },
-  { category: "展览", contract: "exhibition", image: "/art/yike/shell-cream-conch.webp", note: "把灵感带回海湾" },
-  { category: "游戏", contract: "game", image: "/art/yike/shell-spiral-conch.webp", note: "进入一个小世界" },
-  { category: "手作", contract: "craft", image: "/art/yike/shell-sand-dollar.webp", note: "在手心慢慢成形" },
-  { category: "散步", contract: "walk", image: "/art/yike/shell-limpet.webp", note: "沿着风去走一走" },
-  { category: "其他", contract: "other", image: "/art/yike/shell-murex.webp", note: "还没被命名的惊喜" },
+  { category: "书籍", contract: "book", image: "/art/yike/lavender-book.png", note: "一页一页展开" },
+  { category: "电影", contract: "movie", image: "/art/yike/lavender-movie.png", note: "让故事慢慢旋转" },
+  { category: "剧集", contract: "series", image: "/art/yike/lavender-series.png", note: "留住连续的期待" },
+  { category: "美食", contract: "food", image: "/art/yike/lavender-food.png", note: "收藏一口好滋味" },
+  { category: "展览", contract: "exhibition", image: "/art/yike/lavender-exhibition.png", note: "把灵感带回海湾" },
+  { category: "游戏", contract: "game", image: "/art/yike/lavender-game.png", note: "进入一个小世界" },
+  { category: "手作", contract: "craft", image: "/art/yike/lavender-craft.png", note: "在手心慢慢成形" },
+  { category: "散步", contract: "walk", image: "/art/yike/lavender-walk.png", note: "沿着风去走一走" },
+  { category: "其他", contract: "other", image: "/art/yike/lavender-other.png", note: "还没被命名的惊喜" },
+];
+type AchievementCategory = "record" | "growth" | "mood" | "daily";
+type AchievementMetric = "completed" | "petals" | "personal" | "preset" | "uniqueDays";
+type Achievement = {
+  id: string;
+  category: AchievementCategory;
+  title: string;
+  body: string;
+  image: string;
+  metric: AchievementMetric;
+  target: number;
+};
+type AchievementProgress = Achievement & {
+  current: number;
+  unlocked: boolean;
+  unlockedAt?: string;
+};
+const achievementCategories: Array<{ id: AchievementCategory | "all"; label: string; total: number; image: string }> = [
+  { id: "all", label: "全部成就", total: 30, image: "/art/yike/lavender-other.png" },
+  { id: "record", label: "花间记录", total: 10, image: "/art/yike/lavender-book.png" },
+  { id: "growth", label: "慢慢成长", total: 8, image: "/art/yike/garden-sprout-3.png" },
+  { id: "mood", label: "心情花园", total: 6, image: "/art/yike/achievement-plant-dew.png" },
+  { id: "daily", label: "日常芬芳", total: 6, image: "/art/yike/lavender-craft.png" },
+];
+const achievements: Achievement[] = [
+  { id: "first-heart", category: "record", title: "第一株心动", body: "第一次留下属于你和海湾的温柔记忆", image: "/art/yike/achievement-first-heart.png", metric: "completed", target: 1 },
+  { id: "plant-dew", category: "growth", title: "种下一片紫雾", body: "收集 10 份美好记录，让小花园慢慢生长", image: "/art/yike/achievement-plant-dew.png", metric: "petals", target: 10 },
+  { id: "first-scent", category: "record", title: "第一缕花香", body: "完成第一次陪伴记录", image: "/art/yike/achievement-first-scent.png", metric: "completed", target: 1 },
+  { id: "lavender-heart", category: "daily", title: "连续两日花开", body: "在两个不同日子留下生活记录", image: "/art/yike/achievement-lavender-heart.png", metric: "uniqueDays", target: 2 },
+  { id: "old-letter", category: "record", title: "旧日花笺", body: "翻开过去，重新遇见曾经的温柔", image: "/art/yike/achievement-old-letter.png", metric: "completed", target: 3 },
+  { id: "nest-scent", category: "mood", title: "小窝里的香气", body: "在安心的小窝里分享 5 次心情", image: "/art/yike/achievement-nest-scent.png", metric: "personal", target: 5 },
+  { id: "set-out", category: "daily", title: "带着花香出发", body: "和小宜一起完成一次现实中的小目标", image: "/art/yike/achievement-set-out.png", metric: "preset", target: 1 },
+  { id: "misty-wanderer", category: "growth", title: "紫雾漫游者", body: "收集 40 片花露，探索更多生活主题", image: "/art/yike/achievement-misty-wanderer.png", metric: "petals", target: 40 },
 ];
 const feedbackActionText: Record<FeedbackAction, string> = { accept: "就它了", complete: "已完成", reroll: "换一张", not_suitable: "当下不合适", later: "以后再说", dislike: "不喜欢" };
 const onboardingCategories = ["电影", "剧集", "书籍", "美食", "展览", "游戏", "手作", "散步"];
@@ -466,11 +500,32 @@ function SourceBadge({ source }: { source: Source }) {
 }
 
 function EmptyState({ title, body, action, onAction }: { title: string; body: string; action?: string; onAction?: () => void }) {
-  return <div className="empty-state"><img className="empty-shell-art" src="/art/yike/shell-pearl.webp" alt="" /><h3>{title}</h3><p>{body}</p>{action && <button className="secondary-button" type="button" onClick={onAction}>{action}</button>}</div>;
+  return <div className="empty-state"><img className="empty-shell-art" src="/art/yike/lavender-other.png" alt="" /><h3>{title}</h3><p>{body}</p>{action && <button className="secondary-button" type="button" onClick={onAction}>{action}</button>}</div>;
 }
 
 function shellForCategory(category: string) {
   return shellCategories.find((item) => item.category === category) ?? shellCategories[shellCategories.length - 1];
+}
+
+function achievementMetricValue(metric: AchievementMetric, ledger: PetalLedgerEntry[], petalBalance: number) {
+  if (metric === "petals") return petalBalance;
+  if (metric === "personal") return ledger.filter((entry) => entry.cardSource === "personal").length;
+  if (metric === "preset") return ledger.filter((entry) => entry.cardSource === "preset").length;
+  if (metric === "uniqueDays") return new Set(ledger.map((entry) => localDateKey(new Date(entry.occurredAt)))).size;
+  return ledger.length;
+}
+
+function buildAchievementProgress(ledger: PetalLedgerEntry[], petalBalance: number): AchievementProgress[] {
+  return achievements.map((achievement, index) => {
+    const current = achievementMetricValue(achievement.metric, ledger, petalBalance);
+    const unlocked = current >= achievement.target;
+    return { ...achievement, current, unlocked, unlockedAt: unlocked ? ledger[index % Math.max(1, ledger.length)]?.occurredAt ?? new Date().toISOString() : undefined };
+  });
+}
+
+function achievementDateLabel(value?: string) {
+  if (!value) return "待解锁";
+  return new Date(value).toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" }).replace("/", ".");
 }
 
 const otterArtMap: Record<string, string> = {
@@ -1398,6 +1453,8 @@ export default function Home() {
 
         {appReady && view === "memory" && <MemoryView memoryNote={memoryNote} memorySummary={memorySummary} feedbackInsight={feedbackInsight} debugLog={debugLog} petalBalance={petalBalance} petalLedger={petalLedger} onLoadHistory={loadActivityHistory} onMemoryAction={updateMemoryItem} onReset={() => { setPersonalCards([]); setContext(DEFAULT_CONTEXT); setRecentIds([]); setFeedbackInsight(null); setMemoryNote("还没有新的反馈"); setMemorySummary(null); setActiveActivity(null); setPetalLedger([]); showToast("演示数据已重置"); }} />}
 
+        {appReady && view === "achievements" && <AchievementView petalBalance={petalBalance} petalLedger={petalLedger} />}
+
         {appReady && view === "result" && result && <ResultView
           card={result}
           reasons={reasons}
@@ -1430,7 +1487,7 @@ export default function Home() {
         />}
       </section>
 
-      {showPageRail && <PageRail view={view} cardCount={personalCards.length} context={context} contextSummary={contextSummary} ambient={ambient} onRefreshAmbient={refreshAmbientContext} setContext={setContext} />}
+      {showPageRail && <PageRail view={view} cardCount={personalCards.length} context={context} contextSummary={contextSummary} ambient={ambient} petalBalance={petalBalance} petalLedger={petalLedger} onRefreshAmbient={refreshAmbientContext} setContext={setContext} onNavigate={go} />}
 
       {appReady && <nav className="mobile-nav" aria-label="移动端主导航">{navItems.map((item) => <button key={item.id} className={view === item.id ? "current" : ""} type="button" onClick={() => go(item.id)}><span>{item.icon}</span><small>{item.label}</small></button>)}</nav>}
 
@@ -1639,7 +1696,7 @@ function HomeView({ context, contextSummary, ambient, drawing, drawPhase, noCand
     </section>
 
     {noCandidate && <EmptyState title="这次没有硬抽一个不合适的结果" body={noCandidateHelp(context)} action="放宽一个条件" onAction={() => setContext((value) => ({ ...value, time: Math.max(value.time, 60), source: "both", outing: "can_go_out" }))} />}
-    {personalCount === 0 && <div className="cold-start"><div className="mini-shell">◇</div><div><strong>海湾还空空的</strong><p>收进第一份心动，今晚就有贝壳可以抽啦。</p></div><button type="button" onClick={onAdd}>收一枚新贝壳</button></div>}
+    {personalCount === 0 && <div className="cold-start"><div className="mini-shell">◇</div><div><strong>海湾还空空的</strong><p>收进第一份心动，今晚就有贝壳可以抽啦。</p></div><button type="button" onClick={onAdd}>收一颗花种</button></div>}
   </div>;
 }
 
@@ -1658,23 +1715,48 @@ function ContextPanel({ context, contextSummary, ambient, onRefreshAmbient, setC
   return <aside className="desktop-context"><div className="context-title"><span>今晚的小状态</span><b>LIVE</b></div><h2>{contextSummary}</h2><div className="ambient-panel"><div><span>现在是</span><strong>{ambient.localTime}</strong></div><div><span>当地天气</span><strong>{ambient.loading ? "读取中" : weatherText(ambient.weather)}</strong></div><p>{ambient.notice}</p><button type="button" onClick={onRefreshAmbient}>刷新</button></div><p>调整会立刻影响候选集合，敏感状态不会进入长期记忆。</p><ContextControls context={context} setContext={setContext} /><div className="privacy-note"><span>✓</span><div><strong>隐私边界</strong><p>当次状态仅保留在当前浏览器会话。</p></div></div></aside>;
 }
 
-function PageRail({ view, cardCount, context, contextSummary, ambient, onRefreshAmbient, setContext }: {
-  view: View; cardCount: number; context: Context; contextSummary: string; ambient: AmbientContext;
-  onRefreshAmbient: () => void; setContext: React.Dispatch<React.SetStateAction<Context>>;
+function PageRail({ view, cardCount, context, contextSummary, ambient, petalBalance, petalLedger, onRefreshAmbient, setContext, onNavigate }: {
+  view: View; cardCount: number; context: Context; contextSummary: string; ambient: AmbientContext; petalBalance: number; petalLedger: PetalLedgerEntry[];
+  onRefreshAmbient: () => void; setContext: React.Dispatch<React.SetStateAction<Context>>; onNavigate: (next: Exclude<View, "result" | "activity">) => void;
 }) {
   if (view === "home") {
     return <ContextPanel context={context} contextSummary={contextSummary} ambient={ambient} onRefreshAmbient={onRefreshAmbient} setContext={setContext} />;
   }
   if (view === "activity") {
-    return <aside className="desktop-context page-rail activity-rail"><div className="context-title"><span>今晚进行中</span><b>NOW</b></div><img className="rail-shell" src="/art/yike/shell-pearl.webp" alt="珍珠贝" /><h2>先开始，再轻轻记一笔</h2><p>这里先用轻量占位展示完成链路，后续再接真实核销与兑换。</p><div className="rail-note privacy"><strong>推荐仍以适合为先</strong><span>小宜推荐卡只是候选池的一部分，不会越过时间、天气和你的当下状态。</span></div></aside>;
+    return <aside className="desktop-context page-rail activity-rail"><div className="context-title"><span>今晚进行中</span><b>NOW</b></div><img className="rail-shell" src="/art/yike/lavender-other.png" alt="薰衣草" /><h2>先开始，再轻轻记一笔</h2><p>这里先用轻量占位展示完成链路，后续再接真实核销与兑换。</p><div className="rail-note privacy"><strong>推荐仍以适合为先</strong><span>小宜推荐卡只是候选池的一部分，不会越过时间、天气和你的当下状态。</span></div></aside>;
   }
   if (view === "pool") {
-    return <aside className="desktop-context page-rail pool-rail"><div className="context-title"><span>海湾小记</span><b>ATLAS</b></div><img className="rail-shell" src="/art/yike/shell-nautilus.webp" alt="蓝色鹦鹉螺" /><h2>{cardCount} 张卡，九种贝壳</h2><p>每一种贝壳代表一类故事。选中贝壳，就能打捞对应的收藏。</p><div className="rail-note"><strong>图鉴规则</strong><span>有收藏的类别会留下数量；空图鉴也会保留位置，等你慢慢拾满。</span></div></aside>;
+    return <aside className="desktop-context page-rail pool-rail"><div className="context-title"><span>海湾小记</span><b>ATLAS</b></div><img className="rail-shell" src="/art/yike/lavender-movie.png" alt="薰衣草" /><h2>{cardCount} 张卡，九种贝壳</h2><p>每一种贝壳代表一类故事。选中贝壳，就能打捞对应的收藏。</p><div className="rail-note"><strong>图鉴规则</strong><span>有收藏的类别会留下数量；空图鉴也会保留位置，等你慢慢拾满。</span></div></aside>;
   }
   if (view === "add") {
     return <aside className="desktop-context page-rail capture-rail"><div className="context-title"><span>先交给小宜</span><b>3 STEPS</b></div><ol className="capture-steps"><li><b>1</b><div><strong>先认一认</strong><span>找出标题、类别和内容线索</span></div></li><li><b>2</b><div><strong>再补一补</strong><span>估一估需要的时间、力气和准备</span></div></li><li><b>3</b><div><strong>你点头后再收好</strong><span>确认合适，再放进你的卡池</span></div></li></ol><img className="rail-otter" src="/art/yike/otter-companion.webp" alt="拿着贝壳的小宜" /><div className="rail-note privacy"><strong>图片仅用于本次整理</strong><span>原图默认私有，不会公开展示。</span></div></aside>;
   }
-  return <aside className="desktop-context page-rail memory-rail"><div className="context-title"><span>只陪你过今晚的事</span><b>PRIVATE</b></div><img className="rail-shell" src="/art/yike/shell-pearl.webp" alt="珍珠贝" /><h2>有些小状况，小宜只在今晚记得</h2><ul><li>经期不舒服</li><li>不想久站</li><li>不想费心打扮</li></ul><p>这些只用来照顾当下，不会被写成长期偏好，也不会被拿来猜测你的身体或性格。</p><div className="rail-note privacy"><strong>这些记忆都由你做主</strong><span>看得到、改得了、删得掉，也可以全部清空。</span></div></aside>;
+  if (view === "achievements") {
+    return <AchievementRail petalBalance={petalBalance} petalLedger={petalLedger} onNavigate={onNavigate} />;
+  }
+  return <aside className="desktop-context page-rail memory-rail"><div className="context-title"><span>只陪你过今晚的事</span><b>PRIVATE</b></div><img className="rail-shell" src="/art/yike/lavender-other.png" alt="薰衣草" /><h2>有些小状况，小宜只在今晚记得</h2><ul><li>经期不舒服</li><li>不想久站</li><li>不想费心打扮</li></ul><p>这些只用来照顾当下，不会被写成长期偏好，也不会被拿来猜测你的身体或性格。</p><div className="rail-note privacy"><strong>这些记忆都由你做主</strong><span>看得到、改得了、删得掉，也可以全部清空。</span></div></aside>;
+}
+
+function AchievementView({ petalBalance, petalLedger }: { petalBalance: number; petalLedger: PetalLedgerEntry[] }) {
+  const [filter, setFilter] = useState<AchievementCategory | "all">("all");
+  const [sort, setSort] = useState<"recent" | "progress">("recent");
+  const progress = buildAchievementProgress(petalLedger, petalBalance);
+  const unlockedCount = progress.filter((item) => item.unlocked).length;
+  const filtered = filter === "all" ? progress : progress.filter((item) => item.category === filter);
+  const visible = [...filtered].sort((a, b) => {
+    if (sort === "progress") return (b.current / b.target) - (a.current / a.target);
+    if (a.unlocked !== b.unlocked) return a.unlocked ? -1 : 1;
+    return new Date(b.unlockedAt ?? 0).getTime() - new Date(a.unlockedAt ?? 0).getTime();
+  });
+  return <div className="view achievement-view"><div className="achievement-hero"><img src="/art/yike/home-journal-lavender.png" alt="" /><div><span>ACHIEVEMENT · 潮汐花笺</span><h1>潮汐花笺</h1><p>看见那些慢慢发生的温柔瞬间。</p></div></div><section className="achievement-board"><div className="achievement-head"><div><h2>潮汐花笺</h2><p>每一次记录、每一次觉察，都会悄悄成为一张小贴士。</p></div><div className="achievement-stats"><span>已解锁 {unlockedCount} / 30</span><span>花露 {petalBalance}</span></div></div><div className="achievement-toolbar"><div>{achievementCategories.map((category) => <button key={category.id} type="button" className={filter === category.id ? "active" : ""} onClick={() => setFilter(category.id)}>{category.label}</button>)}</div><select value={sort} onChange={(event) => setSort(event.target.value as "recent" | "progress")}><option value="recent">最近解锁</option><option value="progress">进度优先</option></select></div><div className="achievement-grid">{visible.map((item) => <article className={`achievement-card ${item.unlocked ? "unlocked" : "locked"}`} key={item.id}><div className="achievement-art"><img src={item.image} alt="" /></div><h3>{item.title}</h3><p>{item.body}</p><div className="achievement-progress"><i style={{ width: `${Math.min(100, (item.current / item.target) * 100)}%` }} /></div><footer><span>{item.unlocked ? "已解锁" : `${Math.min(item.current, item.target)} / ${item.target}`}</span><time>{achievementDateLabel(item.unlockedAt)}</time></footer></article>)}</div><div className="achievement-footnote"><span>✿</span><p>继续收集，更多小美好还在等你发现。</p><span>✿</span></div></section></div>;
+}
+
+function AchievementRail({ petalBalance, petalLedger, onNavigate }: { petalBalance: number; petalLedger: PetalLedgerEntry[]; onNavigate: (next: Exclude<View, "result" | "activity">) => void }) {
+  const progress = buildAchievementProgress(petalLedger, petalBalance);
+  const recent = progress.filter((item) => item.unlocked).slice(0, 3);
+  const nextGoal = progress.find((item) => !item.unlocked) ?? progress[progress.length - 1];
+  const dewProgress = Math.min(100, (petalBalance / 300) * 100);
+  return <aside className="desktop-context page-rail achievement-rail"><div className="achievement-rail-note"><img src="/art/yike/lavender-other.png" alt="" /><div><strong>潮汐成就小贴士</strong><p>每一次记录、每一次觉察，都是你与自己和解的证明。</p></div></div><div className="achievement-rail-section"><div className="rail-section-head"><span>已解锁类别</span><button type="button">详情</button></div><div className="achievement-category-mini">{achievementCategories.filter((category) => category.id !== "all").map((category) => { const unlocked = progress.filter((item) => item.category === category.id && item.unlocked).length; return <div key={category.id}><img src={category.image} alt="" /><strong>{category.label}</strong><small>{unlocked} / {category.total}</small></div>; })}</div></div><div className="achievement-rail-section"><div className="rail-section-head"><span>最近获得</span><button type="button">全部</button></div><div className="achievement-recent-list">{recent.length === 0 ? <p>完成一次活动后，第一枚成就贴纸会出现在这里。</p> : recent.map((item) => <article key={item.id}><img src={item.image} alt="" /><div><strong>{item.title}</strong><small>{item.body}</small></div><time>{achievementDateLabel(item.unlockedAt)}</time></article>)}</div></div><div className="achievement-rail-section"><span className="rail-mini-title">花露进度</span><div className="dew-progress"><img src="/art/yike/lavender-book.png" alt="" /><div><strong>{petalBalance}<small> / 300</small></strong><i><b style={{ width: `${dewProgress}%` }} /></i><p>再收集 {Math.max(0, 300 - petalBalance)} 滴花露即可解锁新奖励。</p></div></div></div><div className="achievement-target"><img src="/art/yike/lavender-craft.png" alt="" /><div><span>推荐目标</span><strong>{nextGoal?.title ?? "继续记录 3 天"}</strong><small>{nextGoal ? `${Math.min(nextGoal.current, nextGoal.target)} / ${nextGoal.target}` : "让小花园因为你的陪伴慢慢盛开"}</small></div><button type="button" onClick={() => onNavigate("home")}>去记录</button></div></aside>;
 }
 
 function AddView({ inputText, imageName, imagePreview, parseStep, draft, isEditing, savingDraft, fileInputRef, setInputText, setDraft, onImage, onParse, onSave }: {
@@ -1685,8 +1767,8 @@ function AddView({ inputText, imageName, imagePreview, parseStep, draft, isEditi
 }) {
   return <div className="view add-view"><div className="eyebrow">{isEditing ? "EDIT · 修改卡片" : "CAPTURE · 收一枚贝壳"}</div><div className="page-title"><div><img className="page-title-handwritten" src="/art/yike/handwritten-add.png" alt="把种草，变成一张能抽的卡" /><p>{isEditing ? "修改字段后点击保存，不会新增重复卡片。" : "截图、照片或一句话都可以。小宜会先帮你认出来，再陪你补好适合什么时候做。"}</p></div><span className="step-badge">{isEditing ? "编辑中" : "约 10 秒"}</span></div>
     {parseStep === "input" && <div className="add-grid capture-book"><span className="book-rings" aria-hidden="true" /><button className="upload-zone" type="button" onClick={() => fileInputRef.current?.click()}>{imagePreview ? <img src={imagePreview} alt="待识别截图预览" /> : <><span className="upload-icon">＋</span><strong>上传截图或图片</strong><small>支持 PNG、JPG，原图默认私有</small></>}<input ref={fileInputRef} type="file" accept="image/*" hidden onChange={onImage} /></button><div className="text-entry"><label htmlFor="capture-text">也可以直接告诉小宜</label><textarea id="capture-text" value={inputText} onChange={(event) => setInputText(event.target.value)} placeholder="比如：周末想去看海边主题展，听说现场很安静……" /><div className="entry-meta"><span>{imageName || "也可以只输入标题"}</span><span>{inputText.length}/300</span></div></div><button className="primary-button wide" type="button" onClick={onParse}>开始整理</button></div>}
-    {(parseStep === "reading" || parseStep === "organizing") && <div className="agent-progress"><div className="progress-visual"><div className="scan-line" /><img src="/art/yike/shell-pearl.webp" alt="" /><img src="/art/yike/otter-companion.webp" alt="正在工作的海獭小宜" /></div><h2>{parseStep === "reading" ? "正在看懂这份收藏…" : "正在整理执行信息…"}</h2><div className="progress-steps"><span className="done">看内容</span><i /><span className={parseStep === "organizing" ? "done" : ""}>整理字段</span><i /><span>生成草稿</span></div><div className="parse-progress-bar"><div className="parse-progress-fill" style={{ width: parseStep === "reading" ? "33%" : "66%" }} /></div></div>}
-    {parseStep === "draft" && draft && <div className="draft-layout"><div className="agent-summary"><img className="summary-shell" src="/art/yike/shell-pearl.webp" alt="" /><div><span>小宜先整理了一版</span><h2>这枚贝壳，可以这样开始</h2><p>蓝色框里是小宜还没拿准的地方，点一下就能改。</p></div><img src="/art/yike/otter-companion.webp" alt="海獭小宜" /></div><div className="draft-form"><Field label="标题" hint="已识别"><input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></Field><Field label="娱乐类别" hint="请确认" uncertain><select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })}><option>电影</option><option>剧集</option><option>书籍</option><option>美食</option><option>展览</option><option>游戏</option><option>手作</option><option>散步</option><option>其他</option></select></Field><Field label="预计时长" hint="请确认" uncertain><input type="number" value={draft.duration} onChange={(event) => setDraft({ ...draft, duration: Number(event.target.value) })} /><em>分钟</em></Field><Field label="精力"><select value={draft.energy} onChange={(event) => setDraft({ ...draft, energy: event.target.value as Level })}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></Field><Field label="更适合在哪里"><select value={draft.outing} onChange={(event) => setDraft({ ...draft, outing: event.target.value as Card["outing"] })}><option value="indoor">室内</option><option value="outdoor">室外</option><option value="either">均可</option></select></Field><Field label="准备起来麻烦吗"><select value={draft.prep} onChange={(event) => setDraft({ ...draft, prep: event.target.value as Level })}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></Field></div><button className="primary-button wide" type="button" onClick={onSave} disabled={savingDraft}>{savingDraft ? "保存中…" : isEditing ? "保存修改" : "确认，收好这枚贝壳"}</button></div>}
+    {(parseStep === "reading" || parseStep === "organizing") && <div className="agent-progress"><div className="progress-visual"><div className="scan-line" /><img src="/art/yike/lavender-other.png" alt="" /><img src="/art/yike/otter-companion.webp" alt="正在工作的海獭小宜" /></div><h2>{parseStep === "reading" ? "正在看懂这份收藏…" : "正在整理执行信息…"}</h2><div className="progress-steps"><span className="done">看内容</span><i /><span className={parseStep === "organizing" ? "done" : ""}>整理字段</span><i /><span>生成草稿</span></div><div className="parse-progress-bar"><div className="parse-progress-fill" style={{ width: parseStep === "reading" ? "33%" : "66%" }} /></div></div>}
+    {parseStep === "draft" && draft && <div className="draft-layout"><div className="agent-summary"><img className="summary-shell" src={shellForCategory(draft.category).image} alt="" /><div><span>小宜先整理了一版</span><h2>这枚贝壳，可以这样开始</h2><p>蓝色框里是小宜还没拿准的地方，点一下就能改。</p></div><img src="/art/yike/otter-companion.webp" alt="海獭小宜" /></div><div className="draft-form"><Field label="标题" hint="已识别"><input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></Field><Field label="娱乐类别" hint="请确认" uncertain><select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })}><option>电影</option><option>剧集</option><option>书籍</option><option>美食</option><option>展览</option><option>游戏</option><option>手作</option><option>散步</option><option>其他</option></select></Field><Field label="预计时长" hint="请确认" uncertain><input type="number" value={draft.duration} onChange={(event) => setDraft({ ...draft, duration: Number(event.target.value) })} /><em>分钟</em></Field><Field label="精力"><select value={draft.energy} onChange={(event) => setDraft({ ...draft, energy: event.target.value as Level })}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></Field><Field label="更适合在哪里"><select value={draft.outing} onChange={(event) => setDraft({ ...draft, outing: event.target.value as Card["outing"] })}><option value="indoor">室内</option><option value="outdoor">室外</option><option value="either">均可</option></select></Field><Field label="准备起来麻烦吗"><select value={draft.prep} onChange={(event) => setDraft({ ...draft, prep: event.target.value as Level })}><option value="low">低</option><option value="medium">中</option><option value="high">高</option></select></Field></div><button className="primary-button wide" type="button" onClick={onSave} disabled={savingDraft}>{savingDraft ? "保存中…" : isEditing ? "保存修改" : "确认，收好这枚贝壳"}</button></div>}
   </div>;
 }
 
@@ -1708,8 +1790,8 @@ function PoolView({ cards, onAdd, onArchive, onDelete, onEdit }: { cards: Card[]
     { value: "active", label: "可抽取" }, { value: "all", label: "全部" }, { value: "cooling", label: "稍后" }, { value: "completed", label: "已完成" }, { value: "archived", label: "已归档" },
   ];
 
-  return <div className="view pool-view"><div className="eyebrow">COLLECTION · 我的海湾</div><div className="page-title"><div><img className="page-title-handwritten" src="/art/yike/handwritten-pool.png" alt="收进来的好故事" /><p>每一种贝壳都收着一类心动。点开它，就能看看那些曾经想做的事。</p></div><button className="primary-button compact" type="button" onClick={onAdd}>＋ 收一枚新贝壳</button></div>
-    <section className="shell-atlas" aria-labelledby="shell-atlas-title"><div className="atlas-heading"><div><span>贝壳小图鉴</span><h2 id="shell-atlas-title">从一枚喜欢的贝壳开始逛</h2></div><button type="button" className={selectedCategory ? "" : "active"} onClick={() => setSelectedCategory(null)}>查看全部</button></div><div className="shell-atlas-grid">{shellCategories.map((item) => { const count = counts[item.category] ?? 0; const selected = selectedCategory === item.category; return <button type="button" key={item.category} className={`${selected ? "selected" : ""} ${count === 0 ? "empty" : ""}`} aria-pressed={selected} onClick={() => setSelectedCategory(selected ? null : item.category)}><img src={item.image} alt={`${item.category}类别贝壳`} /><strong>{item.category}</strong><span>{count ? `${count} 张卡` : "等第一枚贝壳靠岸"}</span></button>; })}</div></section>
+  return <div className="view pool-view"><div className="eyebrow">COLLECTION · 我的海湾</div><div className="page-title"><div><img className="page-title-handwritten" src="/art/yike/handwritten-pool.png" alt="收进来的好故事" /><p>每一种贝壳都收着一类心动。点开它，就能看看那些曾经想做的事。</p></div><button className="primary-button compact" type="button" onClick={onAdd}>＋ 收一颗花种</button></div>
+    <section className="shell-atlas" aria-labelledby="shell-atlas-title"><div className="atlas-heading"><div><span>贝壳小图鉴</span><h2 id="shell-atlas-title">从一枚喜欢的贝壳开始逛</h2></div><button type="button" className={selectedCategory ? "" : "active"} onClick={() => setSelectedCategory(null)}>查看全部</button></div><div className="shell-atlas-grid">{shellCategories.map((item) => { const count = counts[item.category] ?? 0; const selected = selectedCategory === item.category; return <button type="button" key={item.category} className={`${selected ? "selected" : ""} ${count === 0 ? "empty" : ""}`} aria-pressed={selected} onClick={() => setSelectedCategory(selected ? null : item.category)}><img src={item.image} alt={`${item.category}类别薰衣草`} /><strong>{item.category}</strong><span>{count ? `${count} 张卡` : "等第一枚贝壳靠岸"}</span></button>; })}</div></section>
     <div className="pool-toolbar"><div className="search-box">⌕<input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="找找某部剧、某家店，或那首歌" /></div><div className="pool-count"><strong>{cards.length}</strong><span>枚已收藏</span></div></div>
     <div className="status-filters" aria-label="按状态筛选">{statusOptions.map((option) => <button type="button" key={option.value} className={status === option.value ? "active" : ""} aria-pressed={status === option.value} onClick={() => setStatus(option.value)}>{option.label}</button>)}</div>
     {cards.length === 0 ? <EmptyState title="海湾里还没有卡片" body="先收进一张真正感兴趣的娱乐收藏吧。" action="添加一张" onAction={onAdd} /> : visible.length === 0 ? <EmptyState title="这一格暂时没有卡片" body="换一枚贝壳或清空搜索条件，再打捞一次。" action="查看全部" onAction={() => { setSelectedCategory(null); setStatus("all"); setQuery(""); }} /> : <div className="card-grid atlas-card-grid">{visible.map((card) => { const shell = shellForCategory(card.category); return <article className="pool-card" key={card.id}><div className={`pool-card-art ${card.imageUrl ? "has-image" : ""}`}>{card.imageUrl ? <img src={card.imageUrl} alt={card.title} /> : <><img className="category-shell-art" src={shell.image} alt="" /><small>{card.category}</small></>}</div><div className="pool-card-body"><div><SourceBadge source={card.source} /><span className={`status-pill ${card.status}`}>{card.status === "active" ? "可抽取" : card.status === "cooling" ? "稍后" : card.status === "completed" ? "已完成" : "已归档"}</span></div><h3>{card.title}</h3><p>{card.duration} 分钟 · {card.outing === "indoor" ? "室内" : card.outing === "outdoor" ? "室外" : "均可"} · {levelText[card.prep]}准备</p><div className="pool-actions">{card.status === "archived" ? <><button type="button" onClick={() => onEdit(card)}>编辑</button><button className="danger" type="button" onClick={() => onDelete(card.id)}>删除</button></> : <><button type="button" onClick={() => onEdit(card)}>编辑</button><button type="button" onClick={() => onArchive(card.id)}>归档</button></>}</div></div></article>; })}</div>}
@@ -1728,7 +1810,7 @@ function ResultView({ card, reasons, revealing, feedbackOpen, feedbackSubmitting
         <div className={`result-art ${card.imageUrl ? "has-image" : "has-otter"}`}>{card.imageUrl ? <img src={card.imageUrl} alt={card.title} /> : <img className="result-otter-art" src={otterArtForCategory(card.category)} alt={`${card.category}海獭插画`} />}</div>
         <div className="result-content"><div className="result-badges"><SourceBadge source={card.source} /><span>{card.category}</span></div><h2>{card.title}</h2><p className="result-meta">预计 {card.duration} 分钟　·　{card.outing === "indoor" ? "室内" : card.outing === "outdoor" ? "室外" : "均可"}　·　{levelText[card.prep]}准备</p><div className="reason-block"><strong>为什么现在适合</strong>{reasons.map((reason) => <p key={reason}><span>●</span>{reason}</p>)}</div><div className="companion-line">小宜：今晚只把节奏放慢一点，也很好。</div></div>
       </article>
-      {revealing && <div className="result-pearl-reveal" aria-hidden="true"><i /><img src="/art/yike/pearl-card.webp" alt="" /></div>}
+      {revealing && <div className="result-pearl-reveal" aria-hidden="true"><i /><img src={shellForCategory(card.category).image} alt="" /></div>}
     </div>
     <div className="context-trace"><span>本次参考</span><strong>{ambient.localTime} · {weatherText(ambient.weather)}</strong></div>
     {careNotice && <div className="care-notice"><span>关怀提醒</span><p>{careNotice}</p></div>}
@@ -1805,9 +1887,28 @@ function calendarRange(month: Date) {
   return { start, end };
 }
 
+type GardenStage = "empty" | "sprout" | "bloom";
+
+const gardenStageText: Record<GardenStage, string> = {
+  empty: "待播种",
+  sprout: "幼苗发芽",
+  bloom: "薰衣草开花",
+};
+
+function gardenStageFor(balance: number, index: number): GardenStage {
+  const growthUnits = Math.min(12, Math.floor(Math.max(0, balance) / 2));
+  const plotUnits = Math.max(0, Math.min(3, growthUnits - index * 3));
+  if (plotUnits >= 3) return "bloom";
+  if (plotUnits >= 1) return "sprout";
+  return "empty";
+}
+
 function PetalPool({ balance, ledger }: { balance: number; ledger: PetalLedgerEntry[] }) {
-  const recent = ledger.slice(0, 4);
-  return <aside className="petal-pool" aria-label="薰衣草花瓣收集池"><div><span>花瓣收集池</span><strong>{balance}</strong><small>片薰衣草花瓣</small></div><div className="petal-orbit" aria-hidden="true">{Array.from({ length: 10 }, (_, index) => <i key={index} className={index < Math.min(balance, 10) ? "filled" : ""} />)}</div><p>先做前端占位：个人收藏完成后少量增加，小宜推荐卡完成后增加更多。后续可以接真实账本和兑换。</p><div className="petal-ledger-preview">{recent.length === 0 ? <span>完成一次活动后，这里会出现第一条花瓣记录。</span> : recent.map((entry) => <article key={entry.id}><b>+{entry.amount}</b><div><strong>{entry.cardTitle}</strong><small>{entry.reason}</small></div></article>)}</div></aside>;
+  const recent = ledger.slice(0, 3);
+  const growthUnits = Math.min(12, Math.floor(Math.max(0, balance) / 2));
+  const nextPetals = growthUnits >= 12 ? 0 : (growthUnits + 1) * 2 - balance;
+  const plots = Array.from({ length: 4 }, (_, index) => ({ index, stage: gardenStageFor(balance, index) }));
+  return <aside className="petal-pool garden-pool" aria-label="薰衣草种植区"><div className="garden-pool-head"><div><span>薰衣草种植区</span><strong>{balance}</strong><small>片薰衣草花瓣</small></div><em>{growthUnits}/12 生长进度</em></div><div className="lavender-garden">{plots.map(({ index, stage }) => <article className={`garden-plot ${stage}`} key={`${stage}-${index}`}><img src={`/art/yike/garden-${stage}-${index + 1}.png`} alt="" style={{ animationDelay: `${index * 160}ms` }} /><span>{index + 1}</span><small>{gardenStageText[stage]}</small></article>)}</div><p>{growthUnits >= 12 ? "四块土地都已经开花。后续可以接真实账本，把花瓣兑换和联名礼品放进这里。" : `每 2 片花瓣推进一格生长，再收集 ${Math.max(1, nextPetals)} 片就会出现新的变化。`}</p><div className="petal-ledger-preview">{recent.length === 0 ? <span>完成一次活动后，这里会出现第一条花瓣记录。</span> : recent.map((entry) => <article key={entry.id}><b>+{entry.amount}</b><div><strong>{entry.cardTitle}</strong><small>{entry.reason}</small></div></article>)}</div></aside>;
 }
 
 function MemoryView({ memoryNote, memorySummary, feedbackInsight, debugLog, petalBalance, petalLedger, onLoadHistory, onMemoryAction, onReset }: {
@@ -1868,7 +1969,7 @@ function MemoryView({ memoryNote, memorySummary, feedbackInsight, debugLog, peta
 
   return <div className="view memory-view"><div className="eyebrow">MEMORY · 由你做主</div><div className="page-title"><div><img className="page-title-handwritten" src="/art/yike/handwritten-memory.png" alt="小宜记得什么" /><p>小宜只记住能让下一次更合适的小偏好。你随时可以查看、改一改，或让它忘掉。</p></div></div>
     <div className="memory-top-row">
-    <section className="memory-calendar"><img className="calendar-shell-frame" src="/art/yike/calendar-shell-frame.webp" alt="" /><div className="calendar-content"><div className="calendar-head"><button type="button" onClick={() => moveMonth(-1)} aria-label="上个月">←</button><div><span>拾贝日历</span><h2>{month.getFullYear()} 年 {month.getMonth() + 1} 月</h2></div><button type="button" onClick={() => moveMonth(1)} aria-label="下个月">→</button></div><div className="calendar-weekdays" aria-hidden="true">{["一", "二", "三", "四", "五", "六", "日"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid">{days.map((date) => { const key = localDateKey(date); const dayEvents = eventsByDate[key] ?? []; const outside = date.getMonth() !== month.getMonth(); return <button type="button" key={key} className={`${outside ? "outside" : ""} ${selectedDate === key ? "selected" : ""}`} onClick={() => setSelectedDate(key)} aria-label={`${date.getMonth() + 1}月${date.getDate()}日，${dayEvents.length}条记录`}><span>{date.getDate()}</span><i>{dayEvents.slice(0, 3).map((event) => <b key={event.event_id} className={event.kind} />)}</i></button>; })}</div></div></section>
+    <section className="memory-calendar"><img className="calendar-shell-frame" src="/art/yike/calendar-stamp-lavender.png" alt="" /><div className="calendar-content"><div className="calendar-head"><button type="button" onClick={() => moveMonth(-1)} aria-label="上个月">←</button><div><span>拾贝日历</span><h2>{month.getFullYear()} 年 {month.getMonth() + 1} 月</h2></div><button type="button" onClick={() => moveMonth(1)} aria-label="下个月">→</button></div><div className="calendar-weekdays" aria-hidden="true">{["一", "二", "三", "四", "五", "六", "日"].map((day) => <span key={day}>{day}</span>)}</div><div className="calendar-grid">{days.map((date) => { const key = localDateKey(date); const dayEvents = eventsByDate[key] ?? []; const outside = date.getMonth() !== month.getMonth(); return <button type="button" key={key} className={`${outside ? "outside" : ""} ${selectedDate === key ? "selected" : ""}`} onClick={() => setSelectedDate(key)} aria-label={`${date.getMonth() + 1}月${date.getDate()}日，${dayEvents.length}条记录`}><span>{date.getDate()}</span><i>{dayEvents.slice(0, 3).map((event) => <b key={event.event_id} className={event.kind} />)}</i></button>; })}</div></div></section>
     <PetalPool balance={petalBalance} ledger={petalLedger} />
     </div>
     <section className="day-memory"><div className="day-memory-title"><div><span>{selectedDate}</span><h2>这一天拾到的贝壳</h2></div>{events.some((event) => event.is_demo) && <b>演示记录</b>}</div>{historyLoading ? <p className="calendar-message">正在从海湾里读取记录…</p> : historyError ? <div className="calendar-message error"><p>暂时无法读取：{historyError}</p><button type="button" onClick={() => setRetryKey((value) => value + 1)}>重试</button></div> : selectedEvents.length === 0 ? <p className="calendar-message">这天海面很安静，没有留下新的记录。</p> : <div className="day-event-list">{selectedEvents.map((event) => { const category = categoryFromContract[event.content_category]; const shell = shellForCategory(category); return <article key={event.event_id}><img src={shell.image} alt="" /><div><span>{event.kind === "draw" ? "抽到一张" : feedbackActionText[event.action ?? "accept"]}</span><strong>{event.title}</strong><small>{new Date(event.occurred_at).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })} · {category}</small></div></article>; })}</div>}</section>
