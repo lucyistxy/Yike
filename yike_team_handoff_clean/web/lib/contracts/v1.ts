@@ -172,6 +172,7 @@ export interface UserProfile {
     content_blacklist_keywords?: string[];
     usual_free_time_windows?: string[];
     raw_answers?: Record<string, unknown>;
+    onboarding_completed?: boolean;
     user_editable?: boolean;
     profile_version?: string;
   };
